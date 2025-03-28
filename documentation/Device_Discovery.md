@@ -43,7 +43,7 @@ The tool uses two primary methods for discovering Shelly devices:
 The CLI tool provides several options for device discovery:
 
 ```bash
-python -m shelly_manager.interfaces.cli.main discover [OPTIONS]
+python -m src.shelly_manager.interfaces.cli.main discover [OPTIONS]
 ```
 
 ### Options
@@ -94,13 +94,35 @@ For faster testing and focused operations, the tool supports discovering specifi
 
 ```bash
 # Example: Discover only specific devices
-python -m shelly_manager.interfaces.cli.main discover --ips "192.168.1.100,192.168.1.101,192.168.1.102"
+python -m src.shelly_manager.interfaces.cli.main discover --ips "192.168.1.100,192.168.1.101,192.168.1.102"
 ```
 
 This is particularly useful for:
 - Testing specific devices
 - Working with known devices without scanning the entire network
 - Environments where you know device IPs in advance
+
+## Enhanced Device Information
+
+The discovery process now includes additional important device information:
+
+### Firmware Update Detection
+
+The tool automatically checks if firmware updates are available for each device:
+
+1. For Gen1 devices: Checks the `/status` endpoint for the `update.has_update` field
+2. For Gen2+ devices: Checks `/rpc/Shelly.GetStatus` and examines `sys.available_updates.stable`
+3. Only stable updates are considered (beta updates are detected but not flagged as updates)
+
+### Eco Mode Detection
+
+The tool identifies if eco mode is enabled on devices:
+
+1. For Gen1 devices: Checks eco mode in device settings
+2. For Gen2+ devices: Looks in multiple locations including:
+   - `sys.device.eco_mode` in the device configuration
+   - Switch-specific eco mode settings
+   - Root-level eco mode settings
 
 ## Discovery Output
 
@@ -115,7 +137,118 @@ The discovery command returns a table with detailed information about each disco
 | IP Address | Current IP address |
 | MAC Address | Device MAC address |
 | Firmware | Firmware version |
+| Updates | Whether firmware updates are available (YES/NO) |
+| Eco Mode | Whether eco mode is enabled (YES/NO) |
 | Discovery Method | How the device was discovered (mDNS or HTTP) |
+
+## Device Information Storage
+
+Discovered devices are saved as YAML files in the `data/devices` directory using the format:
+```
+<type>_<mac-address>.yaml
+```
+
+For example:
+- `SHPLG-S_E868E7EA6333.yaml`
+- `Plus1PM_7C87CE65AF78.yaml`
+- `Mini1PMG3_84FCE63E6C98.yaml`
+
+## API Endpoints for Manual Testing
+
+You can manually test or explore devices using these curl commands:
+
+### Gen1 Devices (HTTP GET Endpoints)
+
+```bash
+# Get device information
+curl "http://[Device_IP]/shelly" | jq
+
+# Get device settings
+curl "http://[Device_IP]/settings" | jq
+
+# Get device status (includes update information)
+curl "http://[Device_IP]/status" | jq
+
+# Example with a real IP address:
+curl "http://192.168.1.100/shelly" | jq
+curl "http://192.168.1.100/settings" | jq
+curl "http://192.168.1.100/status" | jq
+```
+
+### Gen2 Devices (RPC POST Endpoints)
+
+```bash
+# Get basic device information
+curl -X POST -d '{}' "http://[Device_IP]/rpc/Shelly.GetInfo" | jq
+
+# Get device status (includes update and eco mode information)
+curl -X POST -d '{}' "http://[Device_IP]/rpc/Shelly.GetStatus" | jq
+
+# Get device information
+curl -X POST -d '{}' "http://[Device_IP]/rpc/Shelly.GetDeviceInfo" | jq
+
+# Get device configuration (includes eco mode settings)
+curl -X POST -d '{}' "http://[Device_IP]/rpc/Shelly.GetConfig" | jq
+
+# Example with a real IP address:
+curl -X POST -d '{}' "http://192.168.0.7/rpc/Shelly.GetInfo" | jq
+curl -X POST -d '{}' "http://192.168.0.7/rpc/Shelly.GetStatus" | jq
+curl -X POST -d '{}' "http://192.168.0.7/rpc/Shelly.GetDeviceInfo" | jq
+curl -X POST -d '{}' "http://192.168.0.7/rpc/Shelly.GetConfig" | jq
+```
+
+### Key API Response Fields
+
+#### Firmware Update Status
+
+For Gen1 devices (in `/status` response):
+```json
+{
+  "update": {
+    "has_update": true,
+    "old_version": "1.8.0",
+    "new_version": "1.9.0"
+  }
+}
+```
+
+For Gen2 devices (in `/rpc/Shelly.GetStatus` response):
+```json
+{
+  "sys": {
+    "available_updates": {
+      "stable": {
+        "version": "1.4.4"
+      },
+      "beta": {
+        "version": "1.5.1-beta2"
+      }
+    }
+  }
+}
+```
+
+#### Eco Mode Status
+
+For Gen2 devices (in `/rpc/Shelly.GetConfig` response):
+```json
+{
+  "sys": {
+    "device": {
+      "eco_mode": true
+    }
+  }
+}
+```
+
+Or in switch configuration:
+```json
+{
+  "switch:0": {
+    "eco_mode": true
+  }
+}
+```
 
 ## Examples
 
@@ -123,21 +256,21 @@ The discovery command returns a table with detailed information about each disco
 
 ```bash
 # Discover all devices on the default network
-python -m shelly_manager.interfaces.cli.main discover --network 192.168.1.0/24
+python -m src.shelly_manager.interfaces.cli.main discover --network 192.168.1.0/24
 ```
 
 ### Targeted Discovery
 
 ```bash
 # Discover specific devices only
-python -m shelly_manager.interfaces.cli.main discover --ips "192.168.1.10,192.168.1.20"
+python -m src.shelly_manager.interfaces.cli.main discover --ips "192.168.1.10,192.168.1.20"
 ```
 
 ### Debug Mode
 
 ```bash
 # Run discovery with detailed debug output
-python -m shelly_manager.interfaces.cli.main discover --network 192.168.1.0/24 --debug
+python -m src.shelly_manager.interfaces.cli.main discover --network 192.168.1.0/24 --debug
 ```
 
 ## Device Type Support
@@ -156,6 +289,7 @@ The tool currently identifies and supports the following device types:
 ### Gen2 Devices
 - PlusPlugS (Shelly Plus Plug S)
 - Plus1PM (Shelly Plus 1PM)
+- Plus1PMMini (Shelly Plus 1PM Mini)
 - Plus2PM (Shelly Plus 2PM)
 - Plus4PM (Shelly Plus 4PM)
 - PlusHT (Shelly Plus H&T)
@@ -177,6 +311,12 @@ The tool currently identifies and supports the following device types:
 - Check network connectivity to the devices
 - Ensure the devices are powered on
 - Check if HTTP access is blocked by firewalls
+
+### Incorrect Update or Eco Mode Detection
+- Use debug mode (`--debug`) to see detailed API responses
+- For firmware updates, check if the device is connected to the Shelly Cloud
+- For eco mode, verify the setting directly in the device's web interface
+- Use the curl commands provided above to manually check device status
 
 ### Performance Tips
 - For large networks, use targeted discovery with `--ips` when possible

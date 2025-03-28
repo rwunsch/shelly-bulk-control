@@ -96,7 +96,7 @@ class DeviceConfigManager:
         raw_model = raw_model.lower() if raw_model else ""
         
         logger = get_logger(__name__)
-        logger.info(f"DEBUG: Matching device type: gen={generation}, raw_type={raw_type}, raw_app={raw_app}, raw_model={raw_model}")
+        logger.debug(f"Matching device type: gen={generation}, raw_type={raw_type}, raw_app={raw_app}, raw_model={raw_model}")
         
         # Special case for Gen1 devices - match by raw_type
         if generation == "gen1":
@@ -114,24 +114,24 @@ class DeviceConfigManager:
             "gen4": self.gen4_devices
         }.get(generation, {})
         
-        logger.info(f"DEBUG: Available {generation} devices: {list(device_types.keys())}")
+        logger.debug(f"Available {generation} devices: {list(device_types.keys())}")
         
         # First try exact match by app field (case-insensitive)
         if raw_app:
             for device_id, device_config in device_types.items():
                 # Case-insensitive comparison
-                logger.info(f"DEBUG: Comparing {device_id.lower()} with {raw_app.lower()}")
+                logger.debug(f"Comparing {device_id.lower()} with {raw_app.lower()}")
                 if device_id.lower() == raw_app.lower():
-                    logger.info(f"DEBUG: Matched {generation} device by app (exact): {device_id}")
+                    logger.debug(f"Matched {generation} device by app (exact): {device_id}")
                     return device_config
             
             # If no exact match, try contains match
             for device_id, device_config in device_types.items():
                 # Try to see if the app name contains the device ID or vice versa
-                logger.info(f"DEBUG: Trying partial match - {device_id.lower()} vs {raw_app.lower()}")
+                logger.debug(f"Trying partial match - {device_id.lower()} vs {raw_app.lower()}")
                 if (device_id.lower() in raw_app.lower() or 
                     raw_app.lower() in device_id.lower()):
-                    logger.info(f"DEBUG: Matched {generation} device by app (partial): {device_id} - {raw_app}")
+                    logger.debug(f"Matched {generation} device by app (partial): {device_id} - {raw_app}")
                     return device_config
         
         # Additional mapping for special cases - adding common name mappings
@@ -149,12 +149,12 @@ class DeviceConfigManager:
             "minig3": "Mini1PMG3",    # Alternate name
         }
         
-        logger.info(f"DEBUG: Checking app mappings for {raw_app}")
+        logger.debug(f"Checking app mappings for {raw_app}")
         if raw_app and raw_app.lower() in app_mappings:
             mapped_device_id = app_mappings[raw_app.lower()]
-            logger.info(f"DEBUG: Found app mapping: {raw_app} -> {mapped_device_id}")
+            logger.debug(f"Found app mapping: {raw_app} -> {mapped_device_id}")
             if mapped_device_id in device_types:
-                logger.info(f"DEBUG: Matched {generation} device through app mapping: {raw_app} -> {mapped_device_id}")
+                logger.debug(f"Matched {generation} device through app mapping: {raw_app} -> {mapped_device_id}")
                 return device_types[mapped_device_id]
         
         # If still no match, try model-based matching as last resort
@@ -169,12 +169,12 @@ class DeviceConfigManager:
         }
         
         # Try to match using raw_model if available
-        logger.info(f"DEBUG: Checking model mappings for {raw_model}")
+        logger.debug(f"Checking model mappings for {raw_model}")
         for model_pattern, device_id in model_mappings.items():
-            logger.info(f"DEBUG: Comparing model pattern {model_pattern} with {raw_model}")
+            logger.debug(f"Comparing model pattern {model_pattern} with {raw_model}")
             if model_pattern in raw_model:
                 if device_id in device_types:
-                    logger.info(f"DEBUG: Matched {generation} device through model mapping: {raw_model} -> {device_id}")
+                    logger.debug(f"Matched {generation} device through model mapping: {raw_model} -> {device_id}")
                     return device_types[device_id]
         
         logger.debug(f"No {generation} device match found for raw_app={raw_app}, raw_model={raw_model}")

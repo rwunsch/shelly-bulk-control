@@ -172,3 +172,31 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Project specific files
+# Logs directory 
+logs/
+*.log
+
+# Device files - keep directory, ignore contents
+data/devices/*
+!data/devices/.gitkeep
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*.bak
+*~
+.DS_Store
+Thumbs.db
+
+# VSCode
+.vscode/
+
+# Output files
+output.txt
+debug_output.txt
+
+# Virtual environment
+.env.local

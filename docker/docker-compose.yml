@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  shelly-manager:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../config:/app/config
+      - ../data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    networks:
+      - shelly-network
+
+networks:
+  shelly-network:
+    driver: bridge 

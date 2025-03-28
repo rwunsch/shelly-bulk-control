@@ -116,7 +116,18 @@ def discover(
             table.add_column("IP Address")
             table.add_column("MAC Address")
             table.add_column("Firmware")
+            table.add_column("Updates")
+            table.add_column("Eco Mode")
             table.add_column("Discovery Method")
+            
+            # Import needed for Text objects
+            from rich.text import Text
+            
+            # Create colored Text objects for YES/NO values
+            update_yes = Text("YES", style="green bold")
+            update_no = Text("NO", style="red")
+            eco_yes = Text("YES", style="green bold")
+            eco_no = Text("NO", style="red")
             
             # Add devices to table
             for device in devices:
@@ -134,6 +145,8 @@ def discover(
                     device.ip_address,
                     device.mac_address,
                     truncate_firmware(device.firmware_version),
+                    update_yes if device.has_update else update_no,
+                    eco_yes if device.eco_mode_enabled else eco_no,
                     device.discovery_method
                 )
             

@@ -15,6 +15,8 @@ import time
 import socket
 import json
 from pathlib import Path
+from ..models.device_registry import device_registry
+from ..models.device_capabilities import DeviceCapabilities, CapabilityDiscovery, device_capabilities
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -90,6 +92,10 @@ class DiscoveryService:
         self._discovery_queue: set[str] = set()
         # Set to track already-discovered IPs to prevent duplicates
         self._discovered_ips: set[str] = set()
+        # Track IPs discovered via mDNS specifically
+        self._mdns_discovered_ips: set[str] = set()
+        # Device capabilities instance
+        self._capabilities = device_capabilities
         
         logger.info("Initializing DiscoveryService")
         logger.debug(f"Debug mode: {debug}")
@@ -386,7 +392,7 @@ class DiscoveryService:
                 mac_address=mac,
                 firmware_version=data.get("ver") or data.get("fw", ""),
                 status=DeviceStatus.ONLINE,
-                discovery_method="HTTP",
+                discovery_method="unknown",  # We'll set this in _probe_device
                 model=raw_model,
                 slot=data.get("slot"),
                 auth_enabled=data.get("auth_en"),
@@ -554,64 +560,10 @@ class DiscoveryService:
     def _save_device_info(self, device: Device):
         """Save discovered device information to a file"""
         try:
-            # Create device info dictionary
-            device_info = {
-                "id": device.id,
-                "name": device.name,
-                "type": device.raw_type or "unknown",
-                "generation": device.generation.value,
-                "ip_address": device.ip_address,
-                "mac_address": device.mac_address,
-                "firmware_version": device.firmware_version,
-                "status": device.status.value,
-                "discovery_method": device.discovery_method,
-                "last_seen": device.last_seen.isoformat(),
-                "hostname": device.hostname,
-                "timezone": device.timezone,
-                "location": device.location,
-                "wifi_ssid": device.wifi_ssid,
-                "cloud_enabled": device.cloud_enabled,
-                "cloud_connected": device.cloud_connected,
-                "mqtt_enabled": device.mqtt_enabled,
-                "mqtt_server": device.mqtt_server,
-                "num_outputs": device.num_outputs,
-                "num_meters": device.num_meters,
-                "max_power": device.max_power,
-                "eco_mode_enabled": device.eco_mode_enabled,
-                "has_update": device.has_update,
-                "model": device.model,
-                "slot": device.slot,
-                "auth_enabled": device.auth_enabled,
-                "auth_domain": device.auth_domain,
-                "fw_id": device.fw_id,
-                "raw_type": device.raw_type,
-                "raw_model": device.raw_model,
-                "raw_app": device.raw_app
-            }
-            
-            # Determine the display type (same as used in table output)
-            display_type = self._get_display_type(device)
-            
-            # Get MAC address - ensure it's uppercase and without colons
-            mac_address = device.mac_address or "unknown"
-            if mac_address:
-                # Remove colons if present
-                mac_address = mac_address.replace(":", "").upper()
-            
-            # Create filename with format "<type>_<mac-address>.yaml" (using underscore)
-            filename = f"{display_type}_{mac_address}.yaml"
-            filepath = os.path.join("data", "devices", filename)
-            
-            logger.debug(f"Saving device info to {filepath}")
-            
-            # Create directories if they don't exist
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
-            
-            # Save to file
-            with open(filepath, 'w') as f:
-                yaml.dump(device_info, f, default_flow_style=False)
-                
-            logger.debug(f"Saved device info to {filepath}")
+            # Add device to registry which handles saving to file
+            device_registry.add_device(device)
+            device_registry.save_device(device)
+            logger.debug(f"Saved device info for {device.id}")
         except Exception as e:
             logger.error(f"Failed to save device info: {e}")
             
@@ -707,11 +659,14 @@ class DiscoveryService:
         """Get list of all discovered devices"""
         return list(self._devices.values())
 
-    def _queue_ip_for_http_discovery(self, ip_address: str, mdns_name: str, service_type: str):
+    def _queue_ip_for_http_discovery(self, ip_address: str, mdns_name: str, service_type: str, via_mdns: bool = True):
         """Queue an IP address for detailed HTTP discovery"""
         if ip_address and ip_address not in self._discovered_ips:
             logger.debug(f"Queueing {ip_address} for HTTP discovery (from {mdns_name})")
             self._discovery_queue.add(ip_address)
+            # Only track as mDNS-discovered if it came from mDNS
+            if via_mdns:
+                self._mdns_discovered_ips.add(ip_address)
 
     async def discover_devices(self, network: str = None, force_http: bool = False, ip_addresses: List[str] = None) -> List[Device]:
         """Discover Shelly devices on the network or at specific IP addresses"""
@@ -726,7 +681,8 @@ class DiscoveryService:
                 logger.info(f"Discovering devices at {len(ip_addresses)} specific IP addresses")
                 # Add provided IPs to the discovery queue
                 for ip in ip_addresses:
-                    self._queue_ip_for_http_discovery(ip, "user-provided", "direct")
+                    # If force_http is True, don't mark these as mDNS-discovered
+                    self._queue_ip_for_http_discovery(ip, "user-provided", "direct", via_mdns=not force_http)
                 
                 # Skip mDNS discovery completely
                 await self._process_discovery_queue()
@@ -995,6 +951,14 @@ class DiscoveryService:
         device = await self._probe_shelly_endpoint(ip, max_retries, retry_delay)
         
         if device:
+            # Determine the discovery method based on how the device was found
+            if ip in self._mdns_discovered_ips:
+                # This was discovered via mDNS first
+                device.discovery_method = "mDNS"
+            else:
+                # This was discovered directly via HTTP probing
+                device.discovery_method = "HTTP"
+                
             # If device was detected, get additional information based on generation
             try:
                 if device.generation == DeviceGeneration.GEN1:
@@ -1050,7 +1014,7 @@ class DiscoveryService:
                     logger.info(f"Final eco mode setting: {device.eco_mode_enabled}")
                 
                 # Log the discovered device
-                logger.info(f"Discovered device via HTTP: {device.id} ({ip})")
+                logger.info(f"Discovered device via {device.discovery_method}: {device.id} ({ip})")
                 logger.info(f"  Name: {device.name}")
                 logger.info(f"  Type: {device.raw_type}")
                 logger.info(f"  Model: {device.model}")
@@ -1068,7 +1032,7 @@ class DiscoveryService:
         logger.debug(f"No Shelly device found at {ip}")
         return None
         
-    async def _probe_shelly_endpoint(self, ip: str, max_retries: int = 2, retry_delay: int = 1) -> Optional[Device]:
+    async def _probe_shelly_endpoint(self, ip: str, max_retries: int = 1, retry_delay: int = 1) -> Optional[Device]:
         """Probe the /shelly endpoint to get basic device information"""
         for attempt in range(max_retries + 1):  # +1 for the initial attempt
             try:
@@ -1359,3 +1323,60 @@ class DiscoveryService:
             # Return unsorted if there was an error
             
         return devices_list
+
+    async def discover_device_capabilities(self, device: Device) -> bool:
+        """
+        Discover and save the capabilities for a specific device.
+        
+        Args:
+            device: Device to discover capabilities for
+            
+        Returns:
+            True if capabilities were successfully discovered, False otherwise
+        """
+        logger.info(f"Discovering capabilities for {device.id} at {device.ip_address}...")
+        
+        if not device.ip_address:
+            logger.error(f"Cannot discover capabilities: Device {device.id} has no IP address")
+            return False
+            
+        try:
+            # Create capability discovery instance
+            capability_discovery = CapabilityDiscovery(self._capabilities)
+            
+            # Ensure session is initialized
+            if not self._session:
+                self._session = aiohttp.ClientSession()
+                
+            # Discover device capabilities
+            capability = await capability_discovery.discover_device_capabilities(device)
+            
+            if capability:
+                logger.info(f"Successfully discovered capabilities for {device.id}")
+                logger.info(f"APIs: {list(capability.supports_api)}")
+                logger.info(f"Parameters: {list(capability.parameters.keys())}")
+                return True
+            else:
+                logger.error(f"Failed to discover capabilities for {device.id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error discovering capabilities for {device.id}: {e}")
+            return False
+            
+    async def discover_capabilities_for_all_devices(self) -> Dict[str, bool]:
+        """
+        Discover and save capabilities for all known devices.
+        
+        Returns:
+            Dictionary with device IDs as keys and success status as values
+        """
+        logger.info(f"Discovering capabilities for all {len(self._devices)} known devices")
+        
+        results = {}
+        
+        for device_id, device in self._devices.items():
+            success = await self.discover_device_capabilities(device)
+            results[device_id] = success
+            
+        return results

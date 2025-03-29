@@ -1,0 +1,865 @@
+id: SHDM-2
+name: Shelly Dimmer 2
+generation: devicegeneration.gen1
+apis:
+  settings:
+    description: 'Gen1 API endpoint: settings'
+    response_structure:
+      device:
+        type: string
+        mac: string
+        hostname: string
+        num_inputs: integer
+        num_outputs: integer
+        num_meters: integer
+      wifi_ap:
+        enabled: boolean
+        ssid: string
+        key: string
+      wifi_sta:
+        enabled: boolean
+        ssid: string
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      wifi_sta1:
+        enabled: boolean
+        ssid: 'null'
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      ap_roaming:
+        enabled: boolean
+        threshold: integer
+      mqtt:
+        enable: boolean
+        server: string
+        user: string
+        id: string
+        reconnect_timeout_max: float
+        reconnect_timeout_min: float
+        clean_session: boolean
+        keep_alive: integer
+        max_qos: integer
+        retain: boolean
+        update_period: integer
+      coiot:
+        enabled: boolean
+        update_period: integer
+        peer: string
+      sntp:
+        server: string
+        enabled: boolean
+      login:
+        enabled: boolean
+        unprotected: boolean
+        username: string
+      pin_code: string
+      name: string
+      fw: string
+      factory_reset_from_switch: boolean
+      pon_wifi_reset: boolean
+      discoverable: boolean
+      build_info:
+        build_id: string
+        build_timestamp: string
+        build_version: string
+      cloud:
+        enabled: boolean
+        connected: boolean
+      timezone: string
+      lat: float
+      lng: float
+      tzautodetect: boolean
+      tz_utc_offset: integer
+      tz_dst: boolean
+      tz_dst_auto: boolean
+      time: string
+      unixtime: integer
+      led_status_disable: boolean
+      debug_enable: boolean
+      allow_cross_origin: boolean
+      actions:
+        active: boolean
+        names:
+        - '...'
+      hwinfo:
+        hw_revision: string
+        batch_id: integer
+      mode: string
+      pulse_mode: integer
+      pulse_mode_detected: integer
+      pulse_mode_rebooted: integer
+      load_autodetect: integer
+      calibrated: boolean
+      transition: integer
+      fade_rate: integer
+      min_brightness: integer
+      zcross_debounce: integer
+      bypass: boolean
+      lights:
+      - name: '...'
+        ison: '...'
+        default_state: '...'
+        auto_on: '...'
+        auto_off: '...'
+        schedule: '...'
+        night_mode: '...'
+        schedule_rules: '...'
+        btn_type: '...'
+        btn_debounce: '...'
+        swap_inputs: '...'
+      night_mode:
+        enabled: boolean
+        start_time: string
+        end_time: string
+        brightness: integer
+      warm_up:
+        enabled: integer
+        brightness: integer
+        time: integer
+      eco_mode_enabled: boolean
+  status:
+    description: 'Gen1 API endpoint: status'
+    response_structure:
+      wifi_sta:
+        connected: boolean
+        ssid: string
+        ip: string
+        rssi: integer
+      cloud:
+        enabled: boolean
+        connected: boolean
+      mqtt:
+        connected: boolean
+      time: string
+      unixtime: integer
+      serial: integer
+      has_update: boolean
+      mac: string
+      cfg_changed_cnt: integer
+      actions_stats:
+        skipped: integer
+      lights:
+      - ison: '...'
+        source: '...'
+        has_timer: '...'
+        timer_started: '...'
+        timer_duration: '...'
+        timer_remaining: '...'
+        mode: '...'
+        brightness: '...'
+        transition: '...'
+      meters:
+      - power: '...'
+        overpower: '...'
+        is_valid: '...'
+        timestamp: '...'
+        counters: '...'
+        total: '...'
+      inputs:
+      - input: '...'
+        event: '...'
+        event_cnt: '...'
+      tmp:
+        tC: float
+        tF: float
+        is_valid: boolean
+      calibrated: boolean
+      calib_progress: integer
+      calib_status: integer
+      calib_running: integer
+      wire_mode: integer
+      forced_neutral: boolean
+      overtemperature: boolean
+      loaderror: integer
+      overpower: boolean
+      debug: integer
+      update:
+        status: string
+        has_update: boolean
+        new_version: string
+        old_version: string
+        beta_version: string
+      ram_total: integer
+      ram_free: integer
+      fs_size: integer
+      fs_free: integer
+      uptime: integer
+  shelly:
+    description: 'Gen1 API endpoint: shelly'
+    response_structure:
+      type: string
+      mac: string
+      auth: boolean
+      fw: string
+      discoverable: boolean
+      longid: integer
+      num_inputs: integer
+      num_outputs: integer
+      num_meters: integer
+  settings/actions:
+    description: 'Gen1 API endpoint: settings/actions'
+    response_structure:
+      actions:
+        btn1_on_url:
+        - '...'
+        btn1_off_url:
+        - '...'
+        btn1_longpush_url:
+        - '...'
+        btn1_shortpush_url:
+        - '...'
+        btn2_on_url:
+        - '...'
+        btn2_off_url:
+        - '...'
+        btn2_longpush_url:
+        - '...'
+        btn2_shortpush_url:
+        - '...'
+        out_on_url:
+        - '...'
+        out_off_url:
+        - '...'
+  settings/ap:
+    description: 'Gen1 API endpoint: settings/ap'
+    response_structure:
+      enabled: boolean
+      ssid: string
+      key: string
+  settings/light:
+    description: 'Gen1 API endpoint: settings/light'
+    response_structure:
+      device:
+        type: string
+        mac: string
+        hostname: string
+        num_inputs: integer
+        num_outputs: integer
+        num_meters: integer
+      wifi_ap:
+        enabled: boolean
+        ssid: string
+        key: string
+      wifi_sta:
+        enabled: boolean
+        ssid: string
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      wifi_sta1:
+        enabled: boolean
+        ssid: 'null'
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      ap_roaming:
+        enabled: boolean
+        threshold: integer
+      mqtt:
+        enable: boolean
+        server: string
+        user: string
+        id: string
+        reconnect_timeout_max: float
+        reconnect_timeout_min: float
+        clean_session: boolean
+        keep_alive: integer
+        max_qos: integer
+        retain: boolean
+        update_period: integer
+      coiot:
+        enabled: boolean
+        update_period: integer
+        peer: string
+      sntp:
+        server: string
+        enabled: boolean
+      login:
+        enabled: boolean
+        unprotected: boolean
+        username: string
+      pin_code: string
+      name: string
+      fw: string
+      factory_reset_from_switch: boolean
+      pon_wifi_reset: boolean
+      discoverable: boolean
+      build_info:
+        build_id: string
+        build_timestamp: string
+        build_version: string
+      cloud:
+        enabled: boolean
+        connected: boolean
+      timezone: string
+      lat: float
+      lng: float
+      tzautodetect: boolean
+      tz_utc_offset: integer
+      tz_dst: boolean
+      tz_dst_auto: boolean
+      time: string
+      unixtime: integer
+      led_status_disable: boolean
+      debug_enable: boolean
+      allow_cross_origin: boolean
+      actions:
+        active: boolean
+        names:
+        - '...'
+      hwinfo:
+        hw_revision: string
+        batch_id: integer
+      mode: string
+      pulse_mode: integer
+      pulse_mode_detected: integer
+      pulse_mode_rebooted: integer
+      load_autodetect: integer
+      calibrated: boolean
+      transition: integer
+      fade_rate: integer
+      min_brightness: integer
+      zcross_debounce: integer
+      bypass: boolean
+      lights:
+      - name: '...'
+        ison: '...'
+        default_state: '...'
+        auto_on: '...'
+        auto_off: '...'
+        schedule: '...'
+        night_mode: '...'
+        schedule_rules: '...'
+        btn_type: '...'
+        btn_debounce: '...'
+        swap_inputs: '...'
+      night_mode:
+        enabled: boolean
+        start_time: string
+        end_time: string
+        brightness: integer
+      warm_up:
+        enabled: integer
+        brightness: integer
+        time: integer
+      eco_mode_enabled: boolean
+  settings/login:
+    description: 'Gen1 API endpoint: settings/login'
+    response_structure:
+      enabled: boolean
+      unprotected: boolean
+      username: string
+  settings/mqtt:
+    description: 'Gen1 API endpoint: settings/mqtt'
+    response_structure:
+      device:
+        type: string
+        mac: string
+        hostname: string
+        num_inputs: integer
+        num_outputs: integer
+        num_meters: integer
+      wifi_ap:
+        enabled: boolean
+        ssid: string
+        key: string
+      wifi_sta:
+        enabled: boolean
+        ssid: string
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      wifi_sta1:
+        enabled: boolean
+        ssid: 'null'
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      ap_roaming:
+        enabled: boolean
+        threshold: integer
+      mqtt:
+        enable: boolean
+        server: string
+        user: string
+        id: string
+        reconnect_timeout_max: float
+        reconnect_timeout_min: float
+        clean_session: boolean
+        keep_alive: integer
+        max_qos: integer
+        retain: boolean
+        update_period: integer
+      coiot:
+        enabled: boolean
+        update_period: integer
+        peer: string
+      sntp:
+        server: string
+        enabled: boolean
+      login:
+        enabled: boolean
+        unprotected: boolean
+        username: string
+      pin_code: string
+      name: string
+      fw: string
+      factory_reset_from_switch: boolean
+      pon_wifi_reset: boolean
+      discoverable: boolean
+      build_info:
+        build_id: string
+        build_timestamp: string
+        build_version: string
+      cloud:
+        enabled: boolean
+        connected: boolean
+      timezone: string
+      lat: float
+      lng: float
+      tzautodetect: boolean
+      tz_utc_offset: integer
+      tz_dst: boolean
+      tz_dst_auto: boolean
+      time: string
+      unixtime: integer
+      led_status_disable: boolean
+      debug_enable: boolean
+      allow_cross_origin: boolean
+      actions:
+        active: boolean
+        names:
+        - '...'
+      hwinfo:
+        hw_revision: string
+        batch_id: integer
+      mode: string
+      pulse_mode: integer
+      pulse_mode_detected: integer
+      pulse_mode_rebooted: integer
+      load_autodetect: integer
+      calibrated: boolean
+      transition: integer
+      fade_rate: integer
+      min_brightness: integer
+      zcross_debounce: integer
+      bypass: boolean
+      lights:
+      - name: '...'
+        ison: '...'
+        default_state: '...'
+        auto_on: '...'
+        auto_off: '...'
+        schedule: '...'
+        night_mode: '...'
+        schedule_rules: '...'
+        btn_type: '...'
+        btn_debounce: '...'
+        swap_inputs: '...'
+      night_mode:
+        enabled: boolean
+        start_time: string
+        end_time: string
+        brightness: integer
+      warm_up:
+        enabled: integer
+        brightness: integer
+        time: integer
+      eco_mode_enabled: boolean
+  settings/network:
+    description: 'Gen1 API endpoint: settings/network'
+    response_structure:
+      device:
+        type: string
+        mac: string
+        hostname: string
+        num_inputs: integer
+        num_outputs: integer
+        num_meters: integer
+      wifi_ap:
+        enabled: boolean
+        ssid: string
+        key: string
+      wifi_sta:
+        enabled: boolean
+        ssid: string
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      wifi_sta1:
+        enabled: boolean
+        ssid: 'null'
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      ap_roaming:
+        enabled: boolean
+        threshold: integer
+      mqtt:
+        enable: boolean
+        server: string
+        user: string
+        id: string
+        reconnect_timeout_max: float
+        reconnect_timeout_min: float
+        clean_session: boolean
+        keep_alive: integer
+        max_qos: integer
+        retain: boolean
+        update_period: integer
+      coiot:
+        enabled: boolean
+        update_period: integer
+        peer: string
+      sntp:
+        server: string
+        enabled: boolean
+      login:
+        enabled: boolean
+        unprotected: boolean
+        username: string
+      pin_code: string
+      name: string
+      fw: string
+      factory_reset_from_switch: boolean
+      pon_wifi_reset: boolean
+      discoverable: boolean
+      build_info:
+        build_id: string
+        build_timestamp: string
+        build_version: string
+      cloud:
+        enabled: boolean
+        connected: boolean
+      timezone: string
+      lat: float
+      lng: float
+      tzautodetect: boolean
+      tz_utc_offset: integer
+      tz_dst: boolean
+      tz_dst_auto: boolean
+      time: string
+      unixtime: integer
+      led_status_disable: boolean
+      debug_enable: boolean
+      allow_cross_origin: boolean
+      actions:
+        active: boolean
+        names:
+        - '...'
+      hwinfo:
+        hw_revision: string
+        batch_id: integer
+      mode: string
+      pulse_mode: integer
+      pulse_mode_detected: integer
+      pulse_mode_rebooted: integer
+      load_autodetect: integer
+      calibrated: boolean
+      transition: integer
+      fade_rate: integer
+      min_brightness: integer
+      zcross_debounce: integer
+      bypass: boolean
+      lights:
+      - name: '...'
+        ison: '...'
+        default_state: '...'
+        auto_on: '...'
+        auto_off: '...'
+        schedule: '...'
+        night_mode: '...'
+        schedule_rules: '...'
+        btn_type: '...'
+        btn_debounce: '...'
+        swap_inputs: '...'
+      night_mode:
+        enabled: boolean
+        start_time: string
+        end_time: string
+        brightness: integer
+      warm_up:
+        enabled: integer
+        brightness: integer
+        time: integer
+      eco_mode_enabled: boolean
+  settings/relay/0:
+    description: 'Gen1 API endpoint: settings/relay/0'
+    response_structure:
+      device:
+        type: string
+        mac: string
+        hostname: string
+        num_inputs: integer
+        num_outputs: integer
+        num_meters: integer
+      wifi_ap:
+        enabled: boolean
+        ssid: string
+        key: string
+      wifi_sta:
+        enabled: boolean
+        ssid: string
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      wifi_sta1:
+        enabled: boolean
+        ssid: 'null'
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      ap_roaming:
+        enabled: boolean
+        threshold: integer
+      mqtt:
+        enable: boolean
+        server: string
+        user: string
+        id: string
+        reconnect_timeout_max: float
+        reconnect_timeout_min: float
+        clean_session: boolean
+        keep_alive: integer
+        max_qos: integer
+        retain: boolean
+        update_period: integer
+      coiot:
+        enabled: boolean
+        update_period: integer
+        peer: string
+      sntp:
+        server: string
+        enabled: boolean
+      login:
+        enabled: boolean
+        unprotected: boolean
+        username: string
+      pin_code: string
+      name: string
+      fw: string
+      factory_reset_from_switch: boolean
+      pon_wifi_reset: boolean
+      discoverable: boolean
+      build_info:
+        build_id: string
+        build_timestamp: string
+        build_version: string
+      cloud:
+        enabled: boolean
+        connected: boolean
+      timezone: string
+      lat: float
+      lng: float
+      tzautodetect: boolean
+      tz_utc_offset: integer
+      tz_dst: boolean
+      tz_dst_auto: boolean
+      time: string
+      unixtime: integer
+      led_status_disable: boolean
+      debug_enable: boolean
+      allow_cross_origin: boolean
+      actions:
+        active: boolean
+        names:
+        - '...'
+      hwinfo:
+        hw_revision: string
+        batch_id: integer
+      mode: string
+      pulse_mode: integer
+      pulse_mode_detected: integer
+      pulse_mode_rebooted: integer
+      load_autodetect: integer
+      calibrated: boolean
+      transition: integer
+      fade_rate: integer
+      min_brightness: integer
+      zcross_debounce: integer
+      bypass: boolean
+      lights:
+      - name: '...'
+        ison: '...'
+        default_state: '...'
+        auto_on: '...'
+        auto_off: '...'
+        schedule: '...'
+        night_mode: '...'
+        schedule_rules: '...'
+        btn_type: '...'
+        btn_debounce: '...'
+        swap_inputs: '...'
+      night_mode:
+        enabled: boolean
+        start_time: string
+        end_time: string
+        brightness: integer
+      warm_up:
+        enabled: integer
+        brightness: integer
+        time: integer
+      eco_mode_enabled: boolean
+  settings/cloud:
+    description: 'Gen1 API endpoint: settings/cloud'
+    response_structure:
+      enabled: boolean
+  settings/device:
+    description: 'Gen1 API endpoint: settings/device'
+    response_structure:
+      device:
+        type: string
+        mac: string
+        hostname: string
+        num_inputs: integer
+        num_outputs: integer
+        num_meters: integer
+      wifi_ap:
+        enabled: boolean
+        ssid: string
+        key: string
+      wifi_sta:
+        enabled: boolean
+        ssid: string
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      wifi_sta1:
+        enabled: boolean
+        ssid: 'null'
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      ap_roaming:
+        enabled: boolean
+        threshold: integer
+      mqtt:
+        enable: boolean
+        server: string
+        user: string
+        id: string
+        reconnect_timeout_max: float
+        reconnect_timeout_min: float
+        clean_session: boolean
+        keep_alive: integer
+        max_qos: integer
+        retain: boolean
+        update_period: integer
+      coiot:
+        enabled: boolean
+        update_period: integer
+        peer: string
+      sntp:
+        server: string
+        enabled: boolean
+      login:
+        enabled: boolean
+        unprotected: boolean
+        username: string
+      pin_code: string
+      name: string
+      fw: string
+      factory_reset_from_switch: boolean
+      pon_wifi_reset: boolean
+      discoverable: boolean
+      build_info:
+        build_id: string
+        build_timestamp: string
+        build_version: string
+      cloud:
+        enabled: boolean
+        connected: boolean
+      timezone: string
+      lat: float
+      lng: float
+      tzautodetect: boolean
+      tz_utc_offset: integer
+      tz_dst: boolean
+      tz_dst_auto: boolean
+      time: string
+      unixtime: integer
+      led_status_disable: boolean
+      debug_enable: boolean
+      allow_cross_origin: boolean
+      actions:
+        active: boolean
+        names:
+        - '...'
+      hwinfo:
+        hw_revision: string
+        batch_id: integer
+      mode: string
+      pulse_mode: integer
+      pulse_mode_detected: integer
+      pulse_mode_rebooted: integer
+      load_autodetect: integer
+      calibrated: boolean
+      transition: integer
+      fade_rate: integer
+      min_brightness: integer
+      zcross_debounce: integer
+      bypass: boolean
+      lights:
+      - name: '...'
+        ison: '...'
+        default_state: '...'
+        auto_on: '...'
+        auto_off: '...'
+        schedule: '...'
+        night_mode: '...'
+        schedule_rules: '...'
+        btn_type: '...'
+        btn_debounce: '...'
+        swap_inputs: '...'
+      night_mode:
+        enabled: boolean
+        start_time: string
+        end_time: string
+        brightness: integer
+      warm_up:
+        enabled: integer
+        brightness: integer
+        time: integer
+      eco_mode_enabled: boolean
+parameters:
+  name:
+    type: string
+    description: Device name
+    api: settings
+    parameter_path: name
+  mqtt_enable:
+    type: boolean
+    description: Enable MQTT
+    api: settings
+    parameter_path: mqtt.enable
+  mqtt_server:
+    type: string
+    description: MQTT server address
+    api: settings
+    parameter_path: mqtt.server

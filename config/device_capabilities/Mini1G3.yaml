@@ -1,0 +1,240 @@
+id: Mini1G3
+name: Shelly Mini 1 Gen3
+generation: devicegeneration.gen3
+apis:
+  Shelly.GetStatus:
+    description: 'Gen2/Gen3 RPC method: Shelly.GetStatus'
+    response_structure:
+      ble: {}
+      bthome:
+        errors:
+        - '...'
+      cloud:
+        connected: boolean
+      input:0:
+        id: integer
+        state: boolean
+      knx: {}
+      mqtt:
+        connected: boolean
+      switch:0:
+        id: integer
+        source: string
+        output: boolean
+        temperature:
+          tC: '...'
+          tF: '...'
+      sys:
+        mac: string
+        restart_required: boolean
+        time: string
+        unixtime: integer
+        uptime: integer
+        ram_size: integer
+        ram_free: integer
+        fs_size: integer
+        fs_free: integer
+        cfg_rev: integer
+        kvs_rev: integer
+        schedule_rev: integer
+        webhook_rev: integer
+        available_updates:
+          beta: '...'
+        reset_reason: integer
+      wifi:
+        sta_ip: string
+        status: string
+        ssid: string
+        rssi: integer
+      ws:
+        connected: boolean
+  Shelly.GetConfig:
+    description: 'Gen2/Gen3 RPC method: Shelly.GetConfig'
+    response_structure:
+      ble:
+        enable: boolean
+        rpc:
+          enable: '...'
+        observer:
+          enable: '...'
+      bthome: {}
+      cloud:
+        enable: boolean
+        server: string
+      input:0:
+        id: integer
+        name: string
+        type: string
+        enable: boolean
+        invert: boolean
+        factory_reset: boolean
+      knx:
+        enable: boolean
+        ia: string
+        routing:
+          addr: '...'
+      mqtt:
+        enable: boolean
+        server: 'null'
+        client_id: string
+        user: 'null'
+        ssl_ca: 'null'
+        topic_prefix: string
+        rpc_ntf: boolean
+        status_ntf: boolean
+        use_client_cert: boolean
+        enable_rpc: boolean
+        enable_control: boolean
+      switch:0:
+        id: integer
+        name: 'null'
+        in_mode: string
+        initial_state: string
+        auto_on: boolean
+        auto_on_delay: float
+        auto_off: boolean
+        auto_off_delay: float
+      sys:
+        device:
+          name: '...'
+          mac: '...'
+          fw_id: '...'
+          discoverable: '...'
+          eco_mode: '...'
+        location:
+          tz: '...'
+          lat: '...'
+          lon: '...'
+        debug:
+          level: '...'
+          file_level: '...'
+          mqtt: '...'
+          websocket: '...'
+          udp: '...'
+        ui_data: {}
+        rpc_udp:
+          dst_addr: '...'
+          listen_port: '...'
+        sntp:
+          server: '...'
+        cfg_rev: integer
+      wifi:
+        ap:
+          ssid: '...'
+          is_open: '...'
+          enable: '...'
+          range_extender: '...'
+        sta:
+          ssid: '...'
+          is_open: '...'
+          enable: '...'
+          ipv4mode: '...'
+          ip: '...'
+          netmask: '...'
+          gw: '...'
+          nameserver: '...'
+        sta1:
+          ssid: '...'
+          is_open: '...'
+          enable: '...'
+          ipv4mode: '...'
+          ip: '...'
+          netmask: '...'
+          gw: '...'
+          nameserver: '...'
+        roam:
+          rssi_thr: '...'
+          interval: '...'
+      ws:
+        enable: boolean
+        server: string
+        ssl_ca: string
+  Sys.GetStatus:
+    description: 'Gen2/Gen3 RPC method: Sys.GetStatus'
+    response_structure:
+      mac: string
+      restart_required: boolean
+      time: string
+      unixtime: integer
+      uptime: integer
+      ram_size: integer
+      ram_free: integer
+      fs_size: integer
+      fs_free: integer
+      cfg_rev: integer
+      kvs_rev: integer
+      schedule_rev: integer
+      webhook_rev: integer
+      available_updates:
+        beta:
+          version: '...'
+      reset_reason: integer
+  Cloud.GetStatus:
+    description: 'Gen2/Gen3 RPC method: Cloud.GetStatus'
+    response_structure:
+      connected: boolean
+  Cloud.GetConfig:
+    description: 'Gen2/Gen3 RPC method: Cloud.GetConfig'
+    response_structure:
+      enable: boolean
+      server: string
+  MQTT.GetConfig:
+    description: 'Gen2/Gen3 RPC method: MQTT.GetConfig'
+    response_structure:
+      enable: boolean
+      server: 'null'
+      client_id: string
+      user: 'null'
+      ssl_ca: 'null'
+      topic_prefix: string
+      rpc_ntf: boolean
+      status_ntf: boolean
+      use_client_cert: boolean
+      enable_rpc: boolean
+      enable_control: boolean
+  WiFi.GetConfig:
+    description: 'Gen2/Gen3 RPC method: WiFi.GetConfig'
+    response_structure:
+      ap:
+        ssid: string
+        is_open: boolean
+        enable: boolean
+        range_extender:
+          enable: '...'
+      sta:
+        ssid: string
+        is_open: boolean
+        enable: boolean
+        ipv4mode: string
+        ip: 'null'
+        netmask: 'null'
+        gw: 'null'
+        nameserver: 'null'
+      sta1:
+        ssid: 'null'
+        is_open: boolean
+        enable: boolean
+        ipv4mode: string
+        ip: 'null'
+        netmask: 'null'
+        gw: 'null'
+        nameserver: 'null'
+      roam:
+        rssi_thr: integer
+        interval: integer
+parameters:
+  mqtt_enable:
+    type: boolean
+    description: Enable MQTT
+    api: MQTT.SetConfig
+    parameter_path: enable
+  mqtt_server:
+    type: string
+    description: MQTT server address
+    api: MQTT.SetConfig
+    parameter_path: server
+  eco_mode:
+    type: boolean
+    description: Energy saving mode
+    api: Sys.SetConfig
+    parameter_path: device.eco_mode

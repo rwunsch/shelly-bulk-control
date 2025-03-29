@@ -7,6 +7,7 @@ from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from ...discovery.discovery_service import DiscoveryService
 from ...models.device import Device
+from ...models.device_registry import device_registry
 from ...utils.logging import LogConfig, get_logger
 import sys
 from rich.layout import Layout
@@ -16,6 +17,10 @@ from rich import box
 
 # Import the groups app
 from .commands.groups import app as groups_app
+from .commands.parameters import app as parameters_app
+
+# Import the capabilities command module
+from .commands import capabilities
 
 # Create Typer app
 app = typer.Typer()
@@ -41,6 +46,31 @@ def truncate_firmware(firmware_version: str) -> str:
     if len(firmware_version) > 30:
         return firmware_version[:27] + "..."
     return firmware_version
+
+@app.callback()
+def main(debug: bool = typer.Option(False, "--debug", help="Enable debug logging")):
+    """
+    Shelly Bulk Control CLI - manage and control Shelly devices in bulk
+    """
+    # Configure logging
+    log_config = LogConfig(
+        app_name="shelly_manager",
+        debug=debug,
+        log_to_file=True,
+        log_to_console=True
+    )
+    log_config.setup()
+    
+    # Initialize device registry by loading all devices
+    try:
+        devices = device_registry.load_all_devices()
+        if devices:
+            logger.debug(f"Loaded {len(devices)} devices into registry at startup")
+    except Exception as e:
+        logger.error(f"Error loading device registry: {e}")
+        if debug:
+            import traceback
+            logger.error(traceback.format_exc())
 
 @app.command()
 def discover(
@@ -236,6 +266,12 @@ def set_settings(device_id: str, setting: list[str], debug: bool = typer.Option(
 
 # Add the groups command
 app.add_typer(groups_app, name="groups", help="Manage device groups")
+
+# Add the parameter management commands
+app.add_typer(parameters_app, name="parameters", help="Manage device parameters")
+
+# Add the capabilities command to the app
+app.add_typer(capabilities.app, name="capabilities", help="Manage device capabilities and features")
 
 if __name__ == "__main__":
     app() 

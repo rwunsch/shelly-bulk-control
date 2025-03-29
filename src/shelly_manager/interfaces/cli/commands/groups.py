@@ -18,6 +18,12 @@ logger = get_logger(__name__)
 # Create typer app
 app = typer.Typer(help="Manage device groups")
 
+# Import the operate app
+from shelly_manager.interfaces.cli.commands.operate import app as operate_app
+
+# Add the operate app to the groups app
+app.add_typer(operate_app, name="operate", help="Execute operations on device groups")
+
 # Create console for rich output
 console = Console()
 

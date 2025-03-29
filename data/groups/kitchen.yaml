@@ -1,0 +1,6 @@
+name: kitchen
+device_ids: []
+description: Devices in the kitchen
+tags:
+- indoor
+- main_floor

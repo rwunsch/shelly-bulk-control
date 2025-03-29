@@ -10,34 +10,31 @@ Device grouping allows you to organize your Shelly devices into logical groups f
 - Devices with similar functions (lights, heating, etc.)
 - Devices that should be controlled together
 
-Groups are defined in a YAML file and can be managed through the CLI.
+Each group is stored in its own YAML file in the `data/groups` directory, making it easy to manage and organize groups.
 
-## Groups File
+## Group Files
 
-The groups file is located at `data/groups/groups.yaml` by default. It has the following structure:
+Each group is stored as a separate YAML file in the `data/groups` directory. The filename is derived from the group name (with invalid characters replaced with underscores).
+
+For example, a group named "living_room" would be stored in `data/groups/living_room.yaml`.
+
+Each group file has the following structure:
 
 ```yaml
-groups:
-  living_room:
-    description: "Devices in the living room"
-    device_ids:
-      - AABBCCDDEEFF  # Living room lamp
-      - 001122334455  # Living room outlet
-    tags:
-      - indoor
-      - main_floor
-
-  outdoor:
-    description: "Outdoor devices"
-    device_ids:
-      - 665544332211  # Garden lights
-    tags:
-      - outdoor
-    config:
-      eco_mode: true
+name: living_room
+description: "Devices in the living room"
+device_ids:
+  - AABBCCDDEEFF  # Living room lamp
+  - 001122334455  # Living room outlet
+tags:
+  - indoor
+  - main_floor
+config:
+  eco_mode: true
 ```
 
 Each group contains:
+- `name`: The name of the group
 - `description`: A human-readable description of the group
 - `device_ids`: List of device IDs (MAC addresses without colons)
 - `tags`: Optional tags for categorizing groups

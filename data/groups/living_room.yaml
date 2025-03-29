@@ -1,0 +1,6 @@
+name: living_room
+device_ids: []
+description: Devices in the living room
+tags:
+- indoor
+- main_floor

@@ -69,7 +69,7 @@ def list_groups(debug: bool = typer.Option(False, "--debug", help="Enable debug 
         
         if not all_groups:
             console.print("[yellow]No groups found[/yellow]")
-            console.print(f"Groups file: {os.path.abspath(group_manager.groups_file)}")
+            console.print(f"Groups directory: {os.path.abspath(group_manager.groups_dir)}")
             return
         
         # Display groups

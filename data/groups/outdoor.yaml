@@ -1,0 +1,7 @@
+name: outdoor
+device_ids: []
+description: Outdoor devices
+tags:
+- outdoor
+config:
+  eco_mode: true

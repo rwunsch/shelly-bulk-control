@@ -182,6 +182,12 @@ logs/
 data/devices/*
 !data/devices/.gitkeep
 
+# Group files - keep directory and example groups, ignore contents
+data/groups/*
+!data/groups/.gitkeep
+!data/groups/kitchen.yaml
+!data/groups/living_room.yaml
+!data/groups/outdoor.yaml
 # Temporary files
 *.tmp
 *.swp

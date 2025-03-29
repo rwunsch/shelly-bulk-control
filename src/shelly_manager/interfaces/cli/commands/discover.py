@@ -1,6 +1,8 @@
+"""CLI command for discovering Shelly devices."""
+
 import click
-from shelly_manager.services.discovery_service import DiscoveryService
-from shelly_manager.utils.logging import setup_logging, get_logger
+from shelly_manager.discovery.discovery_service import DiscoveryService
+from shelly_manager.utils.logging import get_logger, setup_logging
 from rich.table import Table
 from rich.console import Console
 

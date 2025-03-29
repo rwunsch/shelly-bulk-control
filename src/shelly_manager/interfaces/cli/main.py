@@ -14,6 +14,9 @@ from rich.spinner import Spinner
 from rich.text import Text
 from rich import box
 
+# Import the groups app
+from .commands.groups import app as groups_app
+
 # Create Typer app
 app = typer.Typer()
 
@@ -230,6 +233,9 @@ def set_settings(device_id: str, setting: list[str], debug: bool = typer.Option(
         console.print("Settings updated successfully", style="green")
     else:
         console.print("Failed to update settings", style="red")
+
+# Add the groups command
+app.add_typer(groups_app, name="groups", help="Manage device groups")
 
 if __name__ == "__main__":
     app() 

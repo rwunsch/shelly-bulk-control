@@ -1,0 +1,54 @@
+# Shelly Device Groups Configuration
+# 
+# This file defines groups of Shelly devices that can be managed together.
+# Each group has a unique name and can contain:
+#   - description: Optional text describing the group
+#   - device_ids: List of device IDs (MAC addresses or other unique identifiers)
+#   - tags: Optional list of tags for filtering/categorizing groups
+#   - config: Optional configuration settings specific to this group
+#
+# Example:
+# groups:
+#   living_room:
+#     description: "Devices in the living room"
+#     device_ids:
+#       - AABBCCDDEEFF
+#       - 001122334455
+#     tags:
+#       - indoor
+#       - main_floor
+#
+#   outdoor:
+#     description: "Outdoor devices"
+#     device_ids:
+#       - 665544332211
+#     tags:
+#       - outdoor
+#     config:
+#       eco_mode: true
+
+groups:
+  # Add your groups below or replace with your own groups
+  living_room:
+    description: "Devices in the living room"
+    device_ids: []
+    tags:
+      - indoor
+      - main_floor
+
+  kitchen:
+    description: "Devices in the kitchen"
+    device_ids: []
+    tags:
+      - indoor
+      - main_floor
+
+  outdoor:
+    description: "Outdoor devices"
+    device_ids: []
+    tags:
+      - outdoor
+    config:
+      eco_mode: true
+  
+  # Add your own groups below 

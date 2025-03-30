@@ -357,18 +357,43 @@ async def _set_parameter_async(device_id: str, parameter_name: str, value: Any, 
     await parameter_service.start()
     
     try:
-        console.print("Discovering devices...")
-        await discovery_service.discover_devices()
+        # Use cached devices first instead of full discovery
+        device = None
         
-        devices = discovery_service.get_devices()
-        if not devices or device_id not in devices:
+        # Try to get the device from the cache
+        console.print(f"Looking up device {device_id}...")
+        
+        # Check if get_device method exists
+        if hasattr(discovery_service, 'get_device'):
+            device = discovery_service.get_device(device_id)
+        elif hasattr(discovery_service, 'devices'):
+            device = discovery_service.devices.get(device_id)
+        
+        # If not found in cache, try loading from data directory
+        if not device and hasattr(discovery_service, 'load_device'):
+            device = discovery_service.load_device(device_id)
+        
+        # Last resort: do a full discovery, but only if absolutely necessary
+        if not device:
+            console.print("Device not found in cache. Discovering devices...")
+            await discovery_service.discover_devices()
+            
+            # Try to get the device again
+            if hasattr(discovery_service, 'get_device'):
+                device = discovery_service.get_device(device_id)
+            elif hasattr(discovery_service, 'devices'):
+                device = discovery_service.devices.get(device_id)
+            else:
+                # For older versions with get_devices method
+                devices = discovery_service.get_devices()
+                device = devices.get(device_id)
+        
+        if not device:
             console.print(f"[red]Device '{device_id}' not found[/red]")
             return
             
-        device = devices[device_id]
-        
-        # Set parameter value
-        console.print(f"Setting parameter '{parameter_name}' on {device.name} to {value}...")
+        # Get parameter value
+        console.print(f"Setting parameter '{parameter_name}' on {device.name}...")
         success = await parameter_service.set_parameter_value(device, parameter_name, value)
         
         if success:

@@ -1,16 +1,21 @@
 # Next Steps for Shelly Bulk Control
 
-The Shelly Bulk Control project has successfully implemented core features including Device Discovery, Device Grouping, Group Operations, and Device Capabilities. Building on these foundations, here are the recommended next steps:
+The Shelly Bulk Control project has successfully implemented core features including Device Discovery, Device Grouping, Group Operations, Device Capabilities, and Parameter Mapping. Building on these foundations, here are the recommended next steps:
 
-## 1. Parameter Management Integration (Primary Objective)
+## 1. Parameter Management Implementation (In Progress)
 
-The next primary objective is to implement robust parameter management across device groups:
+The parameter management system is now partially implemented with the following features:
+- ✅ Parameter mapping between Gen1 and Gen2+ devices
+- ✅ Standardized parameter names across all device generations
+- ✅ Capability refresh and automatic discovery
+- ✅ Parameter support checking across device types
 
-- Develop a unified parameter management interface for all device types
-- Create commands to read and write parameters across device groups
-- Implement bulk parameter operations with validation and error handling
-- Integrate with Device Capabilities to ensure parameter compatibility
-- Provide mechanisms for synchronized configuration across different device models
+Next steps for parameter management:
+- Complete the implementation of parameter service operations
+- Add support for batch parameter updates with proper error handling
+- Implement automatic device restart after parameter changes when needed
+- Develop CLI commands for setting parameters on groups of devices
+- Create helper commands for common parameter operations
 
 ## 2. API Development
 
@@ -94,4 +99,21 @@ Extend the operation types supported by the system:
 
 ## Getting Started
 
-The recommended immediate focus is on Parameter Management Integration, as it builds upon the Group Operations and Device Capabilities systems while providing essential functionality for bulk device management. Following that, API and Web UI development will create the foundation for more advanced features.
+The work on Parameter Management is well underway with the successful implementation of parameter mapping between device generations. The immediate next steps are:
+
+1. **Complete Parameter Service Updates**:
+   - Update `set_parameter_value` method to properly handle parameter mapping
+   - Implement `restart_device` functionality for both Gen1 and Gen2+ devices
+   - Add `apply_multiple_parameters` method for batch parameter operations
+
+2. **CLI Command Enhancements**:
+   - Update parameter commands to use the new mapping functionality
+   - Add group parameter operations (apply parameter to all devices in a group)
+   - Add support for parameter profiles (multiple parameters at once)
+
+3. **Testing & Validation**:
+   - Test parameter operations on both Gen1 and Gen2 devices
+   - Verify correct parameter mapping during API calls
+   - Test batch operations and device restart functionality
+
+After completing these tasks, focus should shift to the API development and Web UI aspects of the project.

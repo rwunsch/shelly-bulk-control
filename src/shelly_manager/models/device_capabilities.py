@@ -16,6 +16,7 @@ import asyncio
 
 from ..utils.logging import get_logger
 from .device import Device, DeviceGeneration
+from .parameter_mapping import ParameterMapper
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -88,7 +89,16 @@ class DeviceCapability:
         Returns:
             True if the parameter is supported, False otherwise
         """
-        return param_name in self.parameters
+        # First try direct parameter name
+        if param_name in self.parameters:
+            return True
+            
+        # For Gen1 devices, check mapped parameter name
+        if self.generation == "gen1":
+            gen1_param = ParameterMapper.to_gen1_parameter(param_name)
+            return gen1_param in self.parameters
+        
+        return False
     
     def get_parameter_details(self, param_name: str) -> Optional[Dict[str, Any]]:
         """
@@ -100,7 +110,20 @@ class DeviceCapability:
         Returns:
             Parameter details if found, None otherwise
         """
-        return self.parameters.get(param_name)
+        # First try direct parameter name
+        if param_name in self.parameters:
+            return self.parameters.get(param_name)
+            
+        # For Gen1 devices, check mapped parameter name
+        if self.generation == "gen1":
+            gen1_param = ParameterMapper.to_gen1_parameter(param_name)
+            if gen1_param in self.parameters:
+                details = self.parameters.get(gen1_param).copy()
+                # Add mapping information for reference
+                details["mapped_from"] = param_name
+                return details
+        
+        return None
     
     def get_parameter_api(self, param_name: str) -> Optional[str]:
         """
@@ -590,8 +613,8 @@ class CapabilityDiscovery:
                 "type": "string",
                 "description": "MQTT server address"
             },
-            "eco_mode": {
-                "path": "eco_mode",
+            "eco_mode_enabled": {  # Gen1-specific name
+                "path": "eco_mode_enabled",
                 "type": "boolean",
                 "description": "Energy saving mode"
             },
@@ -617,12 +640,29 @@ class CapabilityDiscovery:
                     break
             
             if found:
-                parameters[param_name] = {
+                # Map Gen1 parameter name to standard (Gen2+) parameter name for compatibility
+                standard_param_name = ParameterMapper.to_standard_parameter(param_name)
+                
+                if standard_param_name != param_name:
+                    logger.debug(f"Mapping Gen1 parameter {param_name} to standard parameter {standard_param_name}")
+                
+                parameters[standard_param_name] = {
                     "type": param_info["type"],
                     "description": param_info["description"],
                     "api": "settings",  # Gen1 devices use /settings endpoint
-                    "parameter_path": param_info["path"]
+                    "parameter_path": param_info["path"]  # Keep the original path for API calls
                 }
+        
+        # Even if we didn't directly find eco_mode_enabled in data, add it as a supported parameter
+        # for ALL Gen1 devices as they generally support this function
+        if "eco_mode" not in parameters and "eco_mode_enabled" not in parameters:
+            logger.debug("Adding eco_mode parameter to Gen1 device (all Gen1 devices support this)")
+            parameters["eco_mode"] = {
+                "type": "boolean",
+                "description": "Energy saving mode",
+                "api": "settings",
+                "parameter_path": "eco_mode_enabled"
+            }
     
     def _extract_gen2_parameters(self, method: str, data: Dict[str, Any], 
                                parameters: Dict[str, Any]) -> None:

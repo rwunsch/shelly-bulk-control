@@ -9,6 +9,12 @@ A powerful tool for discovering, managing, and controlling multiple Shelly devic
 - **Targeted Discovery**: Specify exact IP addresses to probe for faster testing
 - **Detailed Device Information**: View device types, models, firmware versions, and more
 - **Structured Configuration**: YAML-based device configurations
+- **Multi-Protocol Device Discovery**: Automatically find Shelly devices on your network using mDNS, HTTP scanning, and local network searches
+- **Device Grouping**: Create logical groups of devices for bulk operations
+- **Group Operations**: Control multiple devices with a single command
+- **Device Capabilities**: Automatically detect device capabilities and supported features
+- **Parameter Mapping**: Unified parameter interface across different device generations
+- **Automated Configuration**: Apply consistent settings across device groups
 
 ## Installation
 
@@ -32,21 +38,49 @@ A powerful tool for discovering, managing, and controlling multiple Shelly devic
 
 ## Usage
 
-### Discover Devices
+### Basic Commands
 
-Scan your entire network for Shelly devices:
 ```bash
-python -m shelly_manager.interfaces.cli.main discover --network 192.168.1.0/24
+# Discover devices on your network
+shelly-bulk-control discover
+
+# List all discovered devices
+shelly-bulk-control devices list
+
+# Get detailed information about a specific device
+shelly-bulk-control devices info shellyplug-s-12345
 ```
 
-Discover specific devices by IP for faster testing:
+### Device Capabilities
+
 ```bash
-python -m shelly_manager.interfaces.cli.main discover --ips "192.168.1.100,192.168.1.101"
+# List all device capability definitions
+shelly-bulk-control capabilities list
+
+# Show detailed capabilities for a specific device type
+shelly-bulk-control capabilities show Plus1PM
+
+# Check which devices support a specific parameter
+shelly-bulk-control capabilities check-parameter eco_mode
+
+# Refresh all capability definitions (rebuild from scratch)
+shelly-bulk-control capabilities refresh --force
 ```
 
-Enable debug logging for more detailed information:
+### Parameter Management
+
 ```bash
-python -m shelly_manager.interfaces.cli.main discover --network 192.168.1.0/24 --debug
+# List available parameters for a device
+shelly-bulk-control parameters list --device shellyplug-s-12345
+
+# Get a parameter value
+shelly-bulk-control parameters get shellyplug-s-12345 eco_mode
+
+# Set a parameter value
+shelly-bulk-control parameters set shellyplug-s-12345 eco_mode true
+
+# Apply a parameter to all devices in a group
+shelly-bulk-control parameters apply living_room eco_mode true
 ```
 
 ## Device Type Support

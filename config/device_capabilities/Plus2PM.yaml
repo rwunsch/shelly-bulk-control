@@ -41,17 +41,19 @@ apis:
         restart_required: boolean
         time: string
         unixtime: integer
+        last_sync_ts: integer
         uptime: integer
         ram_size: integer
         ram_free: integer
+        ram_min_free: integer
         fs_size: integer
         fs_free: integer
         cfg_rev: integer
         kvs_rev: integer
         schedule_rev: integer
         webhook_rev: integer
-        available_updates:
-          beta: '...'
+        btrelay_rev: integer
+        available_updates: {}
         reset_reason: integer
       wifi:
         sta_ip: string
@@ -66,8 +68,6 @@ apis:
       ble:
         enable: boolean
         rpc:
-          enable: '...'
-        observer:
           enable: '...'
       cloud:
         enable: boolean
@@ -99,6 +99,13 @@ apis:
           action: '...'
           power_thr: '...'
           holdoff: '...'
+        slat:
+          enable: '...'
+          open_time: '...'
+          close_time: '...'
+          step: '...'
+          retain_pos: '...'
+          precise_ctl: '...'
       input:0:
         id: integer
         name: 'null'
@@ -144,7 +151,8 @@ apis:
           mqtt: '...'
           websocket: '...'
           udp: '...'
-        ui_data: {}
+        ui_data:
+          cover: '...'
         rpc_udp:
           dst_addr: '...'
           listen_port: '...'
@@ -180,7 +188,7 @@ apis:
           interval: '...'
       ws:
         enable: boolean
-        server: 'null'
+        server: string
         ssl_ca: string
   Sys.GetStatus:
     description: 'Gen2/Gen3 RPC method: Sys.GetStatus'
@@ -189,18 +197,19 @@ apis:
       restart_required: boolean
       time: string
       unixtime: integer
+      last_sync_ts: integer
       uptime: integer
       ram_size: integer
       ram_free: integer
+      ram_min_free: integer
       fs_size: integer
       fs_free: integer
       cfg_rev: integer
       kvs_rev: integer
       schedule_rev: integer
       webhook_rev: integer
-      available_updates:
-        beta:
-          version: '...'
+      btrelay_rev: integer
+      available_updates: {}
       reset_reason: integer
   Cloud.GetStatus:
     description: 'Gen2/Gen3 RPC method: Cloud.GetStatus'

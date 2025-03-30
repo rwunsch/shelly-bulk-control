@@ -21,6 +21,8 @@ from ..models.device_registry import device_registry
 from ..discovery.discovery_service import DiscoveryService
 from ..grouping.group_manager import GroupManager
 from ..models.parameters import ParameterDefinition, get_parameters_for_model
+from ..models.parameter_mapping import ParameterMapper
+import time
 
 logger = get_logger(__name__)
 
@@ -621,157 +623,196 @@ class ParameterService:
             return False, None
     
     async def set_parameter_value(self, device: Device, parameter_name: str, value: Any) -> bool:
-        """
-        Legacy method to set a parameter value on a device.
-        
-        Args:
-            device: The device to set the parameter on
-            parameter_name: The name of the parameter
-            value: The value to set
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        if not self.session:
-            await self.start()
-            
+        """Set a parameter value on a device."""
         # Get parameter definition
-        parameters = self.get_device_parameters(device)
-        if parameter_name not in parameters:
-            logger.warning(f"Parameter '{parameter_name}' not defined for device {device.id}")
+        params = self.get_device_parameters(device)
+        
+        # For Gen1 devices, map parameter name if needed
+        if device.generation == DeviceGeneration.GEN1:
+            gen1_param_name = ParameterMapper.to_gen1_parameter(parameter_name)
+            if gen1_param_name != parameter_name and gen1_param_name in params:
+                logger.debug(f"Mapped parameter {parameter_name} to Gen1 parameter {gen1_param_name}")
+                parameter_name = gen1_param_name
+        
+        if parameter_name not in params:
+            logger.error(f"Parameter {parameter_name} not supported for device {device.id}")
             return False
             
-        parameter = parameters[parameter_name]
+        parameter = params[parameter_name]
         
-        # Validate the value if validation method exists
-        if hasattr(parameter, 'validate_value') and callable(parameter.validate_value):
-            if not parameter.validate_value(value):
-                logger.warning(f"Invalid value for parameter '{parameter_name}': {value}")
+        # Validate value
+        if not parameter.validate_value(value):
+            logger.error(f"Invalid value {value} for parameter {parameter_name}")
+            return False
+            
+        # Set parameter based on device generation
+        if device.generation == DeviceGeneration.GEN1:
+            return await self._set_gen1_parameter_legacy(device, parameter, value)
+        else:
+            return await self._set_gen2_parameter_legacy(device, parameter, value)
+    
+    async def restart_device(self, device: Device) -> bool:
+        """
+        Restart a device after parameter changes.
+        
+        Args:
+            device: Device to restart
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            if not device.ip_address:
+                logger.error(f"Cannot restart: Device {device.id} has no IP address")
                 return False
+                
+            logger.info(f"Restarting device {device.id} ({device.ip_address})")
             
-        try:
             if device.generation == DeviceGeneration.GEN1:
-                return await self._set_gen1_parameter_legacy(device, parameter, value)
+                url = f"http://{device.ip_address}/reboot"
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url) as response:
+                        success = response.status == 200
+                        if success:
+                            logger.info(f"Reboot command sent to Gen1 device {device.id}")
+                        else:
+                            logger.error(f"Failed to restart Gen1 device {device.id}, status: {response.status}")
+                        return success
             else:
-                return await self._set_gen2_parameter_legacy(device, parameter, value)
+                # Gen2+ devices use RPC
+                url = f"http://{device.ip_address}/rpc"
+                data = {
+                    "id": 1,
+                    "method": "Shelly.Reboot",
+                    "params": {}
+                }
+                
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(url, json=data) as response:
+                        success = response.status == 200
+                        if success:
+                            logger.info(f"Reboot command sent to Gen2+ device {device.id}")
+                        else:
+                            logger.error(f"Failed to restart Gen2+ device {device.id}, status: {response.status}")
+                        return success
+                        
         except Exception as e:
-            logger.error(f"Error setting parameter '{parameter_name}' on device {device.id}: {str(e)}")
+            logger.error(f"Error restarting device {device.id}: {str(e)}")
             return False
     
-    async def _set_gen1_parameter_legacy(self, device: Device, parameter: ParameterDefinition, value: Any) -> bool:
+    async def apply_multiple_parameters(self, device: Device, parameters: Dict[str, Any],
+                                      restart_after: bool = True) -> Dict[str, bool]:
         """
-        Legacy method to set a parameter value on a Gen1 device.
+        Apply multiple parameters to a device at once.
         
         Args:
-            device: The Gen1 device
-            parameter: Parameter definition
-            value: The value to set
+            device: Device to update
+            parameters: Dictionary of parameter names and values
+            restart_after: Whether to restart the device after setting parameters
+            
+        Returns:
+            Dictionary of parameter names to success status
+        """
+        results = {}
+        
+        if not parameters:
+            return results
+            
+        if device.generation == DeviceGeneration.GEN1:
+            # Gen1 devices need separate calls for each parameter
+            for param_name, value in parameters.items():
+                results[param_name] = await self.set_parameter_value(device, param_name, value)
+        else:
+            # Gen2+ devices can set multiple parameters in one call
+            # Group parameters by API endpoint
+            params_by_api = {}
+            device_params = self.get_device_parameters(device)
+            
+            for param_name, value in parameters.items():
+                if param_name not in device_params:
+                    results[param_name] = False
+                    continue
+                    
+                param_def = device_params[param_name]
+                api = param_def.gen2_method
+                
+                if api not in params_by_api:
+                    params_by_api[api] = {}
+                    
+                # Build nested structure from parameter path
+                path_parts = param_def.gen2_property.split('.')
+                current = params_by_api[api]
+                
+                for i, part in enumerate(path_parts):
+                    if i == len(path_parts) - 1:
+                        current[part] = value
+                    else:
+                        if part not in current:
+                            current[part] = {}
+                        current = current[part]
+            
+            # Now call each API with its grouped parameters
+            for api, params in params_by_api.items():
+                success = await self._set_gen2_parameters_batch(device, api, params)
+                
+                # Mark all parameters in this batch with the same success status
+                for param_name in parameters.keys():
+                    if param_name in device_params and device_params[param_name].gen2_method == api:
+                        results[param_name] = success
+        
+        # Restart device if needed and if any parameter was set successfully
+        if restart_after and any(results.values()):
+            await self.restart_device(device)
+            
+        return results
+    
+    async def _set_gen2_parameters_batch(self, device: Device, method: str, params: Dict[str, Any]) -> bool:
+        """
+        Set multiple parameters on a Gen2+ device in one API call.
+        
+        Args:
+            device: Device to update
+            method: RPC method to call
+            params: Parameter structure to send
             
         Returns:
             True if successful, False otherwise
         """
-        if not parameter.gen1_endpoint or not parameter.gen1_property:
-            logger.warning(f"Parameter '{parameter.name}' does not have Gen1 mapping")
-            return False
-        
-        # Format the value for Gen1 API
-        if hasattr(parameter, 'format_value_for_gen1') and callable(parameter.format_value_for_gen1):
-            formatted_value = parameter.format_value_for_gen1(value)
-        elif parameter.parameter_type.name == "BOOLEAN":
-            formatted_value = "on" if value else "off"
-        else:
-            formatted_value = value
-        
-        # Build URL
-        url = f"http://{device.ip_address}/{parameter.gen1_endpoint}?{parameter.gen1_property}={formatted_value}"
-        
         try:
-            async with self.session.get(url, timeout=self.http_timeout) as response:
-                if response.status == 200:
-                    response_data = await response.json()
-                    logger.debug(f"Successfully set parameter '{parameter.name}' on Gen1 device {device.id}")
-                    return True
-                else:
-                    logger.warning(f"HTTP error {response.status} setting parameter on {device.id}")
-                    return False
-        except Exception as e:
-            logger.error(f"Error setting Gen1 parameter: {str(e)}")
-            return False
-    
-    async def _set_gen2_parameter_legacy(self, device: Device, parameter: ParameterDefinition, value: Any) -> bool:
-        """
-        Legacy method to set a parameter value on a Gen2 device.
-        
-        Args:
-            device: The Gen2 device
-            parameter: Parameter definition
-            value: The value to set
+            if not device.ip_address:
+                logger.error(f"Cannot set parameters: Device {device.id} has no IP address")
+                return False
+                
+            url = f"http://{device.ip_address}/rpc"
             
-        Returns:
-            True if successful, False otherwise
-        """
-        if not parameter.gen2_method or not parameter.gen2_component or not parameter.gen2_property:
-            logger.warning(f"Parameter '{parameter.name}' does not have Gen2 mapping")
-            return False
-        
-        # Format the value for Gen2 API
-        if hasattr(parameter, 'format_value_for_gen2') and callable(parameter.format_value_for_gen2):
-            formatted_value = parameter.format_value_for_gen2(value)
-        else:
-            formatted_value = value
-        
-        # Build URL and payload
-        url = f"http://{device.ip_address}/rpc"
-        
-        # For nested properties, build the config object
-        config = {}
-        props = parameter.gen2_property.split('.')
-        
-        # Handle nested properties by building a nested object
-        if len(props) == 1:
-            # Simple case, just one level
-            config[props[0]] = formatted_value
-        else:
-            # Build nested object
-            current = config
-            for i, prop in enumerate(props[:-1]):
-                current[prop] = {}
-                current = current[prop]
-            current[props[-1]] = formatted_value
-        
-        payload = {
-            "id": 1,
-            "src": "shelly-bulk-control",
-            "method": parameter.gen2_method,
-            "params": {
-                "config": {
-                    parameter.gen2_component: config
+            # Prepare the RPC payload
+            payload = {
+                "id": 1,
+                "method": method,
+                "params": {
+                    "config": params
                 }
             }
-        }
-        
-        try:
-            async with self.session.post(url, json=payload, timeout=self.http_timeout) as response:
-                if response.status == 200:
-                    response_data = await response.json()
-                    
-                    if "error" in response_data:
-                        logger.warning(f"RPC error setting parameter on {device.id}: {response_data['error']}")
+            
+            logger.debug(f"Setting parameters on {device.id} with method {method}: {params}")
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, json=payload) as response:
+                    if response.status != 200:
+                        logger.error(f"Error setting parameters on device {device.id}, status: {response.status}")
                         return False
+                        
+                    response_data = await response.json()
+                    logger.debug(f"Response from {device.id}: {response_data}")
                     
-                    logger.debug(f"Successfully set parameter '{parameter.name}' on Gen2 device {device.id}")
-                    
-                    # Update eco mode status if this was the parameter being set
-                    if parameter.name == "eco_mode":
-                        device.eco_mode_enabled = value
-                        device_registry.save_device(device)
-                    
+                    # Check if we need to restart (some changes require restart)
+                    if "result" in response_data and "restart_required" in response_data["result"]:
+                        logger.info(f"Device {device.id} indicates restart required after parameter change")
+                        
                     return True
-                else:
-                    logger.warning(f"HTTP error {response.status} setting parameter on {device.id}")
-                    return False
+                    
         except Exception as e:
-            logger.error(f"Error setting Gen2 parameter: {str(e)}")
+            logger.error(f"Error setting parameters on device {device.id}: {str(e)}")
             return False
 
     async def _get_gen1_parameter(self, device: Device, param_details: Dict[str, Any]) -> Any:
@@ -969,42 +1010,32 @@ class ParameterService:
                 raise ValueError(f"HTTP error {response.status}: {await response.text()}")
     
     async def _get_device(self, device_id: str) -> Optional[Device]:
-        """
-        Get a device by ID, either from registry, cache, or discovery.
-        
-        Args:
-            device_id: Device ID to get
+        """Get a device by ID."""
+        # Use the discovery service directly
+        try:
+            # Check if we need to discover devices first
+            if not hasattr(self.discovery_service, 'devices') or not self.discovery_service.devices:
+                await self.discovery_service.discover_devices()
             
-        Returns:
-            Device if found, None otherwise
-        """
-        # Check cache first
-        if device_id in self._device_cache:
-            return self._device_cache[device_id]
+            # For newer versions of DiscoveryService (using devices attribute)
+            if hasattr(self.discovery_service, 'devices'):
+                if device_id in self.discovery_service.devices:
+                    return self.discovery_service.devices[device_id]
             
-        # Then try from registry
-        device = device_registry.get_device(device_id)
-        if device:
-            # Cache for future use
-            self._device_cache[device_id] = device
-            return device
+            # For newer versions using get_device method
+            if hasattr(self.discovery_service, 'get_device'):
+                return self.discovery_service.get_device(device_id)
             
-        # If not found and we have discovery service, try to discover
-        if not device and self.discovery_service:
-            # Look for the device using discovery service
-            logger.debug(f"Device {device_id} not found in registry, attempting discovery")
+            # For older versions with get_devices method
+            if hasattr(self.discovery_service, 'get_devices'):
+                devices = self.discovery_service.get_devices()
+                return devices.get(device_id)
             
-            # Try to find the device by ID
-            await self.discovery_service.start()
-            devices = await self.discovery_service.discover_devices()
-            for d in devices:
-                if d.id == device_id:
-                    device = d
-                    device_registry.save_device(device)  # Save for future reference
-                    self._device_cache[device_id] = device  # Cache for future use
-                    break
-        
-        return device
+            logger.error(f"Could not find device with ID: {device_id}")
+            return None
+        except Exception as e:
+            logger.error(f"Error getting device {device_id}: {str(e)}")
+            return None
     
     def _convert_value(self, value: Any, type_name: str) -> Any:
         """

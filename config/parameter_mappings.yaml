@@ -1,0 +1,14 @@
+# Parameter mapping between generations
+# Format: standard_name: gen1_name
+# 
+# The standard_name (Gen2+ format) is the key
+# The gen1_name is the value
+#
+# Example:
+# eco_mode: eco_mode_enabled
+# This means the standard parameter name is "eco_mode", 
+# but Gen1 devices use "eco_mode_enabled" 
+
+mappings:
+  eco_mode: eco_mode_enabled
+  # Add more mappings as needed 

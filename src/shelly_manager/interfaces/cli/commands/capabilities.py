@@ -10,11 +10,14 @@ from rich.table import Table
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
+import yaml
+from pathlib import Path
 
 from ....models.device_capabilities import DeviceCapabilities, CapabilityDiscovery, device_capabilities
 from ....models.device_registry import device_registry
 from ....discovery.discovery_service import DiscoveryService
 from ....utils.logging import get_logger
+from ....models.parameter_mapping import ParameterMapper
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -355,6 +358,237 @@ def check_parameter(
         console.print(f"[yellow]Parameter '{parameter}' not supported by any known device type[/yellow]")
     else:
         console.print(table)
+
+@app.command("standardize-parameters")
+def standardize_parameters(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show changes without applying them")
+):
+    """
+    Standardize parameter names in capability files to use Gen2+ naming conventions.
+    
+    This ensures all capability files use the same parameter names regardless of
+    device generation, making parameter compatibility checks simpler.
+    """
+    try:
+        # Get capabilities directory
+        capabilities_dir = Path("config/device_capabilities")
+        if not capabilities_dir.exists():
+            console.print("[red]Capabilities directory not found[/red]")
+            return
+            
+        # Initialize parameter mapper to load mappings
+        mapper = ParameterMapper()
+        
+        # Track files processed
+        files_processed = 0
+        files_changed = 0
+        
+        # Process each YAML file
+        for file_path in capabilities_dir.glob("*.yaml"):
+            try:
+                with open(file_path, 'r') as f:
+                    data = yaml.safe_load(f)
+                
+                if not data or "parameters" not in data:
+                    continue
+                    
+                files_processed += 1
+                file_changed = False
+                
+                # Check if this is a Gen1 device
+                is_gen1 = data.get("generation") == "gen1"
+                
+                if is_gen1 and "parameters" in data:
+                    parameters = data["parameters"]
+                    params_to_rename = {}
+                    
+                    # Find parameters that need to be renamed
+                    for param_name, param_data in list(parameters.items()):
+                        standard_name = ParameterMapper.to_standard_parameter(param_name)
+                        if standard_name != param_name:
+                            params_to_rename[param_name] = standard_name
+                            file_changed = True
+                            
+                            # Log the changes we'll make
+                            console.print(f"  - {file_path.name}: Rename '{param_name}' to '{standard_name}'")
+                            
+                    # Update the parameters dict
+                    for old_name, new_name in params_to_rename.items():
+                        param_data = parameters.pop(old_name)
+                        parameters[new_name] = param_data
+                        # Make sure parameter_path preserves the original Gen1 name
+                        if "parameter_path" in param_data and param_data["parameter_path"] == old_name:
+                            param_data["parameter_path"] = old_name
+                
+                # Save changes if needed
+                if file_changed:
+                    files_changed += 1
+                    console.print(f"[yellow]Standardizing parameters in {file_path}[/yellow]")
+                    
+                    if not dry_run:
+                        with open(file_path, 'w') as f:
+                            yaml.dump(data, f, default_flow_style=False, sort_keys=False)
+            
+            except Exception as e:
+                console.print(f"[red]Error processing {file_path}: {str(e)}[/red]")
+        
+        # Summary
+        if dry_run:
+            console.print(f"[green]Dry run complete. {files_changed} of {files_processed} files would be modified.[/green]")
+        else:
+            console.print(f"[green]Standardization complete. Modified {files_changed} of {files_processed} files.[/green]")
+    
+    except Exception as e:
+        console.print(f"[red]Error standardizing parameters: {str(e)}[/red]")
+
+@app.command("refresh")
+def refresh_capabilities(
+    force: bool = typer.Option(False, "--force", "-f", help="Force refresh without confirmation"),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Show what would be deleted without actually deleting"),
+    no_discover: bool = typer.Option(False, "--no-discover", help="Skip automatic capability discovery after deletion")
+):
+    """
+    Refresh all device capability files by deleting and rediscovering them.
+    
+    This is useful when you want to rebuild capability files from scratch,
+    ensuring all parameters are correctly discovered and standardized.
+    
+    By default, capabilities will be automatically rediscovered after deletion.
+    Use --no-discover to skip discovery and just delete the files.
+    """
+    # Invert the no_discover flag to get auto_discover
+    auto_discover = not no_discover
+    
+    try:
+        # Get capabilities directory
+        capabilities_dir = Path("config/device_capabilities")
+        if not capabilities_dir.exists():
+            console.print("[red]Capabilities directory not found[/red]")
+            return
+            
+        # Count files
+        capability_files = list(capabilities_dir.glob("*.yaml"))
+        file_count = len(capability_files)
+        
+        # Show what we're about to do
+        console.print(f"[yellow]Found {file_count} capability files in {capabilities_dir}[/yellow]")
+        
+        if not force and not dry_run:
+            confirm = typer.confirm("Are you sure you want to delete all capability files? They will be rediscovered on next use.")
+            if not confirm:
+                console.print("[yellow]Operation cancelled.[/yellow]")
+                return
+        
+        # Delete files
+        if not dry_run:
+            for file_path in capability_files:
+                try:
+                    file_path.unlink()
+                    console.print(f"Deleted: {file_path}")
+                except Exception as e:
+                    console.print(f"[red]Failed to delete {file_path}: {str(e)}[/red]")
+        else:
+            for file_path in capability_files:
+                console.print(f"Would delete: {file_path}")
+        
+        # Summary
+        if dry_run:
+            console.print(f"[green]Dry run complete. Would delete {file_count} capability files.[/green]")
+        else:
+            console.print(f"[green]Refresh initiated. Deleted {file_count} capability files.[/green]")
+            if not auto_discover:
+                console.print("Capability files will need to be manually regenerated or will be created on next use.")
+            
+        # Run discovery if requested and not in dry run mode
+        if auto_discover and not dry_run:
+            console.print("\n[cyan]Starting automatic capability discovery...[/cyan]")
+            
+            # Run scan for all accessible devices
+            try:
+                # Create discovery service
+                discovery_service = DiscoveryService()
+                
+                # Create async function to run discovery
+                async def run_discovery():
+                    # Initialize services
+                    await discovery_service.start()
+                    
+                    # Use cached devices if available to avoid network scan
+                    console.print("[cyan]Using cached devices for capability discovery...[/cyan]")
+                    device_registry.load_all_devices()
+                    # Fix: get_devices() method now requires a parameter
+                    # We'll pass None or an empty list to get all devices
+                    try:
+                        # First try with None parameter (if API accepts it)
+                        devices = list(device_registry.get_devices(None).values())
+                    except TypeError:
+                        try:
+                            # Then try with empty list (to get all devices)
+                            devices = list(device_registry.get_devices([]).values())
+                        except Exception as e:
+                            console.print(f"[yellow]Error retrieving devices from registry: {str(e)}[/yellow]")
+                            console.print("[yellow]Falling back to discovery service...[/yellow]")
+                            devices = []
+                    
+                    # If no devices found in registry, try network scan
+                    if not devices:
+                        console.print("[yellow]No cached devices found. Performing network scan...[/yellow]")
+                        # Fall back to network scan if no cached devices
+                        await discovery_service.discover_devices()
+                        
+                        # Get devices from discovery service
+                        if hasattr(discovery_service, 'devices'):
+                            # Handle both cases where devices might be a dict or a list
+                            if isinstance(discovery_service.devices, dict):
+                                devices = list(discovery_service.devices.values())
+                            else:  # If it's a list
+                                devices = discovery_service.devices
+                        elif hasattr(discovery_service, 'get_devices'):
+                            # Handle different API versions
+                            try:
+                                devices = list(discovery_service.get_devices().values())
+                            except TypeError:
+                                try:
+                                    devices = list(discovery_service.get_devices(None).values())
+                                except Exception:
+                                    devices = []
+                    
+                    # Final check if we have any devices
+                    if not devices:
+                        console.print("[yellow]No devices found. Cannot discover capabilities.[/yellow]")
+                        await discovery_service.stop()
+                        return
+                    
+                    console.print(f"[green]Found {len(devices)} devices for capability discovery[/green]")
+                    
+                    # Create capability discovery
+                    capability_discovery = CapabilityDiscovery(device_capabilities)
+                    
+                    # Discover capabilities for each device
+                    success_count = 0
+                    for device in devices:
+                        console.print(f"Discovering capabilities for {device.id} ({device.name or 'Unknown'})...")
+                        capability = await capability_discovery.discover_device_capabilities(device)
+                        if capability:
+                            success_count += 1
+                            console.print(f"[green]  Success: Created capability definition for {capability.device_type}[/green]")
+                    
+                    # Stop discovery service
+                    await discovery_service.stop()
+                    
+                    # Summary
+                    console.print(f"\n[green]Capability discovery complete. Created {success_count} of {len(devices)} capability definitions.[/green]")
+                
+                # Run discovery
+                asyncio.run(run_discovery())
+                
+            except Exception as e:
+                console.print(f"[red]Error during automatic capability discovery: {str(e)}[/red]")
+                console.print("You may need to run capability discovery manually:")
+                console.print("python -m shelly_manager.interfaces.cli.main capabilities discover --scan")
+        
+    except Exception as e:
+        console.print(f"[red]Error refreshing capabilities: {str(e)}[/red]")
 
 async def _discover_capabilities(device_id: Optional[str], scan_network: bool, 
                              ip_address: Optional[str], network: Optional[str], 

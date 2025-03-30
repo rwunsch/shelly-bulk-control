@@ -65,6 +65,23 @@ shelly-bulk-control capabilities show SHPLG-S --parameters
 shelly-bulk-control capabilities show SHPLG-S --apis
 ```
 
+### Refreshing and Rediscovering Capabilities
+
+To completely refresh capability files (rebuild all definitions from scratch):
+
+```bash
+# Refresh all capability files (delete and rebuild)
+shelly-bulk-control capabilities refresh --force
+
+# Refresh without automatic discovery
+shelly-bulk-control capabilities refresh --force --no-discover
+```
+
+This is useful when:
+- You want to ensure all capability files are up-to-date
+- You need to standardize parameter names after an update
+- You want to rebuild capability files with the latest parameter mapping rules
+
 ### Discovering Device Capabilities
 
 The system can automatically discover and generate capability definitions by probing devices:
@@ -104,6 +121,20 @@ This command will:
 3. Query the device's API to discover its capabilities
 4. Generate and save capability definitions for each device
 
+### Standardizing Parameter Names
+
+To ensure consistent parameter naming across different device generations:
+
+```bash
+# Standardize parameter names (dry run)
+shelly-bulk-control capabilities standardize-parameters --dry-run
+
+# Actually apply standardization
+shelly-bulk-control capabilities standardize-parameters
+```
+
+This command maps Gen1-specific parameter names to standardized Gen2+ names in capability files, ensuring a consistent interface for parameter management.
+
 ### Checking Parameter Support
 
 To check which device types support a specific parameter:
@@ -117,6 +148,23 @@ shelly-bulk-control capabilities check-parameter max_power --type plus
 
 # Check for a specific device
 shelly-bulk-control capabilities check-parameter mqtt_enable --id shellyplug-s-12345
+```
+
+## Parameter Mapping System
+
+The system includes a parameter mapping mechanism that standardizes parameter names across different device generations:
+
+1. All capability files use Gen2+ parameter names (like `eco_mode`) as the standard
+2. For Gen1 devices, these standardized names are mapped to Gen1-specific names (like `eco_mode_enabled`) when making API calls
+3. This provides a unified parameter interface while handling generation-specific differences behind the scenes
+
+The mapping configuration is stored in `config/parameter_mappings.yaml` and can be customized if needed:
+
+```yaml
+# Standard parameter name: Gen1 parameter name
+mappings:
+  eco_mode: eco_mode_enabled
+  # Other mappings...
 ```
 
 ## Programmatic Usage

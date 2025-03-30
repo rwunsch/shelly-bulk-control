@@ -619,5 +619,10 @@ parameters:
     description: MQTT server address
     api: settings
     parameter_path: mqtt.server
+  eco_mode:
+    type: boolean
+    description: Energy saving mode
+    api: settings
+    parameter_path: eco_mode_enabled
 type_mappings:
 - SHGS-1

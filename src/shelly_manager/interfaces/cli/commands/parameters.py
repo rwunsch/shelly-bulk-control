@@ -14,6 +14,7 @@ from shelly_manager.grouping.group_manager import GroupManager
 from shelly_manager.discovery.discovery_service import DiscoveryService
 from shelly_manager.parameter.parameter_service import ParameterService
 from shelly_manager.utils.logging import LogConfig, get_logger
+from shelly_manager.models.device_registry import device_registry
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -353,46 +354,93 @@ async def _set_parameter_async(device_id: str, parameter_name: str, value: Any, 
     parameter_service = ParameterService(group_manager, discovery_service)
     
     # Start services
-    await discovery_service.start()
     await parameter_service.start()
     
     try:
-        # Use cached devices first instead of full discovery
+        # Use cached devices first, specifically using device_registry
         device = None
         
-        # Try to get the device from the cache
+        # Prioritize device_registry for lookups without network scanning
         console.print(f"Looking up device {device_id}...")
         
-        # Check if get_device method exists
-        if hasattr(discovery_service, 'get_device'):
-            device = discovery_service.get_device(device_id)
-        elif hasattr(discovery_service, 'devices'):
-            device = discovery_service.devices.get(device_id)
+        # Load devices from registry
+        device_registry.load_all_devices()
         
-        # If not found in cache, try loading from data directory
-        if not device and hasattr(discovery_service, 'load_device'):
-            device = discovery_service.load_device(device_id)
+        # Try to get the device by MAC address (normalized)
+        mac_address = device_id.replace(":", "").upper()
+        device = device_registry.get_device(mac_address)
         
-        # Last resort: do a full discovery, but only if absolutely necessary
+        # If device still not found, start discovery service but try to avoid full network scanning
         if not device:
-            console.print("Device not found in cache. Discovering devices...")
-            await discovery_service.discover_devices()
+            console.print("Device not found in registry. Starting discovery service...")
             
-            # Try to get the device again
+            # Now start discovery service as it might be needed
+            await discovery_service.start()
+            
+            # Check if get_device method exists
             if hasattr(discovery_service, 'get_device'):
                 device = discovery_service.get_device(device_id)
             elif hasattr(discovery_service, 'devices'):
-                device = discovery_service.devices.get(device_id)
-            else:
-                # For older versions with get_devices method
-                devices = discovery_service.get_devices()
-                device = devices.get(device_id)
+                if isinstance(discovery_service.devices, dict):
+                    device = discovery_service.devices.get(device_id)
+                else:
+                    # If devices is a list, find the device by ID
+                    for d in discovery_service.devices:
+                        if d.id == device_id:
+                            device = d
+                            break
+            
+            # Last resort: do a full discovery, but only if absolutely necessary
+            if not device:
+                console.print("Device not found in cache. Discovering devices...")
+                await discovery_service.discover_devices()
+                
+                # Try to get the device again
+                if hasattr(discovery_service, 'get_device'):
+                    device = discovery_service.get_device(device_id)
+                elif hasattr(discovery_service, 'devices'):
+                    if isinstance(discovery_service.devices, dict):
+                        device = discovery_service.devices.get(device_id)
+                    else:
+                        # If devices is a list, find the device by ID
+                        for d in discovery_service.devices:
+                            if d.id == device_id:
+                                device = d
+                                break
+                else:
+                    # For older versions with get_devices method
+                    try:
+                        devices = discovery_service.get_devices()
+                        # Check if devices is a dictionary or a list
+                        if isinstance(devices, dict):
+                            device = devices.get(device_id)
+                        else:
+                            # If devices is a list, find the device by ID
+                            for d in devices:
+                                if d.id == device_id:
+                                    device = d
+                                    break
+                    except TypeError:
+                        # Handle the case where get_devices might need parameters
+                        try:
+                            devices = discovery_service.get_devices(None)
+                            if isinstance(devices, dict):
+                                device = devices.get(device_id)
+                            else:
+                                # If devices is a list, find the device by ID
+                                for d in devices:
+                                    if d.id == device_id:
+                                        device = d
+                                        break
+                        except Exception as e:
+                            logger.warning(f"Error getting devices: {str(e)}")
+                            console.print(f"[yellow]Warning: Could not get device list. Trying alternative methods.[/yellow]")
         
         if not device:
             console.print(f"[red]Device '{device_id}' not found[/red]")
             return
             
-        # Get parameter value
+        # Set parameter value
         console.print(f"Setting parameter '{parameter_name}' on {device.name}...")
         success = await parameter_service.set_parameter_value(device, parameter_name, value)
         
@@ -404,7 +452,8 @@ async def _set_parameter_async(device_id: str, parameter_name: str, value: Any, 
     finally:
         # Stop services
         await parameter_service.stop()
-        await discovery_service.stop()
+        if discovery_service and hasattr(discovery_service, 'started') and discovery_service.started:
+            await discovery_service.stop()
 
 
 @app.command("apply")

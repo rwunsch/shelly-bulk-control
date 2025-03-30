@@ -1321,4 +1321,147 @@ class ParameterService:
             "success_count": total_success,
             "error_count": total_errors,
             "results": results
-        } 
+        }
+
+    async def _set_gen1_parameter_legacy(self, device: Device, parameter: ParameterDefinition, value: Any) -> bool:
+        """
+        Legacy method to set a parameter value on a Gen1 device.
+        
+        Args:
+            device: The Gen1 device
+            parameter: Parameter definition
+            value: Value to set
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not device.ip_address:
+            logger.error(f"Cannot set parameter: Device {device.id} has no IP address")
+            return False
+            
+        # Format value for Gen1 API if needed
+        formatted_value = parameter.format_value_for_gen1(value)
+        
+        # For Gen1 devices, map parameter name if necessary
+        param_name = parameter.name
+        gen1_param_name = ParameterMapper.to_gen1_parameter(param_name)
+        
+        if gen1_param_name != param_name:
+            logger.debug(f"Mapped parameter {param_name} to Gen1 parameter {gen1_param_name}")
+        
+        # Gen1 devices use a simple GET request with parameters
+        endpoint = parameter.gen1_endpoint if hasattr(parameter, 'gen1_endpoint') and parameter.gen1_endpoint else "settings"
+        url = f"http://{device.ip_address}/{endpoint}"
+        params = {gen1_param_name: formatted_value}
+        
+        logger.debug(f"Setting Gen1 parameter {gen1_param_name}={formatted_value} on {device.id}")
+        
+        try:
+            async with self.session.get(url, params=params, timeout=self.http_timeout) as response:
+                if response.status != 200:
+                    logger.error(f"Error setting parameter on device {device.id}, status: {response.status}")
+                    return False
+                    
+                # Update device eco_mode_enabled if applicable
+                if param_name == "eco_mode" or gen1_param_name == "eco_mode_enabled":
+                    device.eco_mode_enabled = bool(value)
+                    if hasattr(self, 'device_registry') and self.device_registry:
+                        self.device_registry.save_device(device)
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error setting parameter on device {device.id}: {str(e)}")
+            return False
+            
+    async def _set_gen2_parameter_legacy(self, device: Device, parameter: ParameterDefinition, value: Any) -> bool:
+        """
+        Legacy method to set a parameter value on a Gen2/Gen3 device.
+        
+        Args:
+            device: The Gen2/Gen3 device
+            parameter: Parameter definition
+            value: Value to set
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not device.ip_address:
+            logger.error(f"Cannot set parameter: Device {device.id} has no IP address")
+            return False
+            
+        if not hasattr(parameter, 'gen2_method') or not parameter.gen2_method:
+            logger.error(f"Parameter {parameter.name} does not have Gen2 method defined")
+            return False
+            
+        # Format value for Gen2 API if needed
+        formatted_value = parameter.format_value_for_gen2(value)
+        
+        # Build the request
+        method = parameter.gen2_method
+        
+        # Prepare the params object based on component and property
+        if not hasattr(parameter, 'gen2_component') or not parameter.gen2_component or not hasattr(parameter, 'gen2_property') or not parameter.gen2_property:
+            logger.error(f"Parameter {parameter.name} does not have complete Gen2 mapping")
+            return False
+        
+        # Build nested configuration structure
+        config = {}
+        current = config
+        
+        # Add component level
+        if parameter.gen2_component:
+            current[parameter.gen2_component] = {}
+            current = current[parameter.gen2_component]
+        
+        # Add property, which might be nested
+        props = parameter.gen2_property.split('.')
+        for i, prop in enumerate(props):
+            if i == len(props) - 1:
+                # Last property gets the value
+                current[prop] = formatted_value
+            else:
+                # Intermediate properties get nested dicts
+                current[prop] = {}
+                current = current[prop]
+                
+        # Build the full RPC request
+        url = f"http://{device.ip_address}/rpc"
+        payload = {
+            "id": 1,
+            "src": "shelly-bulk-control",
+            "method": method,
+            "params": {
+                "config": config
+            }
+        }
+        
+        logger.debug(f"Setting Gen2 parameter {parameter.name}={formatted_value} on {device.id}: {json.dumps(payload)}")
+        
+        try:
+            async with self.session.post(url, json=payload, timeout=self.http_timeout) as response:
+                if response.status != 200:
+                    logger.error(f"Error setting parameter on device {device.id}, status: {response.status}")
+                    return False
+                    
+                response_data = await response.json()
+                if "error" in response_data:
+                    logger.error(f"RPC error setting parameter on device {device.id}: {response_data['error']}")
+                    return False
+                
+                # Check if restart is required
+                if "result" in response_data and isinstance(response_data["result"], dict) and response_data["result"].get("restart_required", False):
+                    logger.info(f"Device {device.id} requires restart after parameter change")
+                    # TODO: Implement device restart functionality
+                
+                # Update device eco_mode_enabled if applicable
+                if parameter.name == "eco_mode":
+                    device.eco_mode_enabled = bool(value)
+                    if hasattr(self, 'device_registry') and self.device_registry:
+                        self.device_registry.save_device(device)
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"Error setting parameter on device {device.id}: {str(e)}")
+            return False 

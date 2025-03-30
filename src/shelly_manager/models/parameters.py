@@ -122,8 +122,8 @@ COMMON_PARAMETERS = {
         gen1_endpoint="settings",
         gen1_property="eco_mode",
         
-        # Gen2 API mapping - Use System.SetConfig for Gen2
-        gen2_method="System.SetConfig",
+        # Gen2 API mapping - Using correct Sys.SetConfig method
+        gen2_method="Sys.SetConfig",
         gen2_component="device", 
         gen2_property="eco_mode"
     ),
@@ -143,8 +143,8 @@ COMMON_PARAMETERS = {
         gen1_endpoint="settings",
         gen1_property="max_power",
         
-        # Gen2 API mapping
-        gen2_method="Shelly.SetConfig",
+        # Gen2 API mapping - Using correct Sys.SetConfig method
+        gen2_method="Sys.SetConfig",
         gen2_component="sys",
         gen2_property="max_power"
     )

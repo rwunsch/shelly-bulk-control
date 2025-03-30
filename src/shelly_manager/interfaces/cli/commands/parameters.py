@@ -529,6 +529,7 @@ def apply_parameter(
     group_name: str = typer.Argument(..., help="Name of the group to apply parameter to"),
     parameter_name: str = typer.Argument(..., help="Name of the parameter to apply"),
     value: str = typer.Argument(..., help="Value to set"),
+    reboot: bool = typer.Option(False, "--reboot", help="Reboot devices after setting parameter if needed"),
     debug: bool = typer.Option(False, "--debug", help="Enable debug logging")
 ):
     """
@@ -537,6 +538,9 @@ def apply_parameter(
     Examples:
         - Disable eco mode for all devices in a group:
           shelly-bulk-control parameters apply eco_enabled eco_mode false
+          
+        - Set parameter and reboot devices if needed:
+          shelly-bulk-control parameters apply eco_enabled eco_mode true --reboot
     """
     try:
         # Configure logging
@@ -552,14 +556,14 @@ def apply_parameter(
         parsed_value = _parse_value(value)
         
         # Run the operation asynchronously
-        asyncio.run(_apply_parameter_async(group_name, parameter_name, parsed_value, debug))
+        asyncio.run(_apply_parameter_async(group_name, parameter_name, parsed_value, reboot, debug))
         
     except Exception as e:
         logger.error(f"Failed to apply parameter: {str(e)}")
         console.print(f"[red]Error:[/red] {str(e)}")
 
 
-async def _apply_parameter_async(group_name: str, parameter_name: str, value: Any, debug: bool):
+async def _apply_parameter_async(group_name: str, parameter_name: str, value: Any, reboot: bool, debug: bool):
     """
     Apply a parameter asynchronously.
     
@@ -567,6 +571,7 @@ async def _apply_parameter_async(group_name: str, parameter_name: str, value: An
         group_name: Name of the group
         parameter_name: Name of the parameter
         value: Value to set
+        reboot: Whether to reboot devices after setting parameter if needed
         debug: Whether to enable debug logging
     """
     # Initialize services
@@ -574,76 +579,131 @@ async def _apply_parameter_async(group_name: str, parameter_name: str, value: An
     group_manager = GroupManager()
     parameter_service = ParameterService(group_manager, discovery_service)
     
-    # Start services
-    await discovery_service.start()
-    await parameter_service.start()
+    # Start parameter service without discovery
+    await parameter_service.start(no_discovery=True)
+    discovery_started = False
     
     try:
-        console.print("Discovering devices...")
-        await discovery_service.discover_devices()
-        
         # Get the group
         group = group_manager.get_group(group_name)
         if not group:
             console.print(f"[red]Group '{group_name}' not found[/red]")
             return
-            
-        # Apply parameter to group
-        console.print(f"Applying parameter '{parameter_name}' to group '{group_name}' with value {value}...")
-        result = await parameter_service.apply_parameter_to_group(group_name, parameter_name, value)
         
-        # Display results
-        _display_apply_results(result)
+        console.print(f"Loading devices for group '{group_name}' from registry...")
+        
+        # Load devices from registry first
+        device_registry.load_all_devices()
+        
+        # Get devices from the group
+        devices = []
+        missing_devices = []
+        
+        for device_id in group.device_ids:
+            # Normalize device ID
+            mac_address = device_id.replace(":", "").upper()
+            device = device_registry.get_device(mac_address)
+            
+            if device and device.ip_address:
+                devices.append(device)
+            else:
+                missing_devices.append(device_id)
+        
+        # Only start discovery if some devices are missing from registry
+        if missing_devices:
+            console.print(f"[yellow]Some devices not found in registry or missing IP addresses: {', '.join(missing_devices)}[/yellow]")
+            console.print("Starting targeted discovery for missing devices...")
+            
+            # Start discovery service
+            await discovery_service.start()
+            discovery_started = True
+            
+            # Use targeted discovery instead of full network scan
+            await discovery_service.discover_specific_devices(missing_devices, scan_timeout=5)
+            
+            # Try to get devices again
+            for device_id in missing_devices[:]:  # Create a copy to iterate
+                device = None
+                
+                # Try to get from discovery service
+                if hasattr(discovery_service, 'get_device'):
+                    device = discovery_service.get_device(device_id)
+                elif hasattr(discovery_service, 'devices'):
+                    if isinstance(discovery_service.devices, dict):
+                        device = discovery_service.devices.get(device_id)
+                    else:
+                        # If devices is a list, find the device by ID
+                        for d in discovery_service.devices:
+                            if d.id == device_id:
+                                device = d
+                                break
+                
+                if device:
+                    devices.append(device)
+                    missing_devices.remove(device_id)
+        
+        if missing_devices:
+            console.print(f"[yellow]Warning: Could not find {len(missing_devices)} devices: {', '.join(missing_devices)}[/yellow]")
+        
+        # Display found devices
+        console.print(f"Found {len(devices)} out of {len(group.device_ids)} devices in group '{group_name}'")
+        
+        if not devices:
+            console.print("[red]No devices found to apply parameter[/red]")
+            return
+            
+        # Apply parameter to each device
+        console.print(f"Applying parameter '{parameter_name}' to {len(devices)} devices with value {value}...")
+        
+        success_count = 0
+        reboot_required_devices = []
+        failed_devices = []
+        
+        for device in devices:
+            console.print(f"Setting {parameter_name} on {device.name} ({device.id})...")
+            success = await parameter_service.set_parameter_value(device, parameter_name, value)
+            
+            if success:
+                success_count += 1
+                
+                # Check if device needs to be rebooted for changes to take effect
+                if hasattr(device, 'restart_required') and device.restart_required:
+                    reboot_required_devices.append(device)
+                    logger.info(f"Device {device.id} requires restart for changes to take effect.")
+            else:
+                failed_devices.append(device.id)
+        
+        # Handle rebooting if requested
+        if reboot and reboot_required_devices:
+            console.print(f"\nRebooting {len(reboot_required_devices)} devices that require restart...")
+            reboot_success_count = 0
+            
+            for device in reboot_required_devices:
+                console.print(f"Rebooting device {device.name} ({device.id})...")
+                reboot_success = await _reboot_device(device, parameter_service.session)
+                
+                if reboot_success:
+                    reboot_success_count += 1
+                    console.print(f"[green]Successfully rebooted device {device.name}[/green]")
+                else:
+                    console.print(f"[yellow]Failed to reboot device {device.name}[/yellow]")
+            
+            console.print(f"\nReboot summary: {reboot_success_count}/{len(reboot_required_devices)} devices rebooted successfully")
+        elif reboot_required_devices:
+            console.print(f"\n[yellow]Note: {len(reboot_required_devices)} devices require reboot for changes to take effect.[/yellow]")
+            console.print("[yellow]Use --reboot flag to automatically reboot these devices.[/yellow]")
+        
+        # Display summary
+        if success_count == len(devices):
+            console.print(f"[green]Successfully set parameter '{parameter_name}' on all {success_count} devices[/green]")
+        else:
+            console.print(f"[yellow]Set parameter '{parameter_name}' on {success_count} out of {len(devices)} devices[/yellow]")
+            
+            if failed_devices:
+                console.print(f"[red]Failed devices: {', '.join(failed_devices)}[/red]")
         
     finally:
         # Stop services
         await parameter_service.stop()
-        await discovery_service.stop()
-
-
-def _display_apply_results(results: Dict[str, Any]):
-    """
-    Display results of applying a parameter.
-    
-    Args:
-        results: Results to display
-    """
-    if "error" in results:
-        console.print(f"[red]Error:[/red] {results['error']}")
-        return
-        
-    if "warning" in results:
-        console.print(f"[yellow]Warning:[/yellow] {results['warning']}")
-        return
-    
-    # Create table header
-    console.print(f"\n[bold]Parameter application results for group '{results['group']}'[/bold]")
-    console.print(f"Parameter: [cyan]{results['parameter']}[/cyan]")
-    console.print(f"Value: {results['value']}")
-    console.print(f"Devices affected: {results['device_count']}")
-    
-    # Create table for device results
-    table = Table(show_header=True, header_style="bold magenta", box=box.SQUARE)
-    table.add_column("Device ID", style="dim")
-    table.add_column("Success")
-    table.add_column("Error")
-    
-    # Add rows for each device
-    for device_id, device_result in results["results"].items():
-        success = device_result.get("success", False)
-        error = device_result.get("error", "")
-        
-        table.add_row(
-            device_id,
-            "[green]Yes[/green]" if success else "[red]No[/red]",
-            error
-        )
-    
-    # Display the table
-    console.print(table)
-    
-    # Calculate success rate
-    success_count = sum(1 for r in results["results"].values() if r.get("success", False))
-    success_rate = success_count / results["device_count"] * 100 if results["device_count"] > 0 else 0
-    
-    console.print(f"\nSuccess rate: [{'green' if success_rate == 100 else 'yellow' if success_rate > 50 else 'red'}]{success_rate:.0f}%[/]") 
+        if discovery_started:
+            await discovery_service.stop() 

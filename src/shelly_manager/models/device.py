@@ -48,7 +48,8 @@ class Device:
         raw_model: Optional[str] = None,  # Store the raw model from the device
         raw_app: Optional[str] = None,  # Store the raw app type from the device
         last_seen: Optional[datetime] = None,  # Added last_seen parameter
-        has_update: bool = False  # New field for firmware update status
+        has_update: bool = False,  # New field for firmware update status
+        restart_required: bool = False  # Track if device needs restart after config changes
     ):
         self.id = id
         self.name = name
@@ -77,6 +78,7 @@ class Device:
         self.raw_app = raw_app
         self.last_seen = last_seen or datetime.now()
         self.has_update = has_update  # Initialize new field
+        self.restart_required = restart_required  # Track if device needs restart after config changes
         
         # Get device configuration
         self.config = device_config_manager.get_device_config(
@@ -140,7 +142,8 @@ class Device:
             "raw_model": self.raw_model,
             "raw_app": self.raw_app,
             "features": self.features,
-            "has_update": self.has_update
+            "has_update": self.has_update,
+            "restart_required": self.restart_required
         }
 
     @classmethod

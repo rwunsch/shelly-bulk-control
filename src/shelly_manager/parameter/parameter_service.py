@@ -815,7 +815,9 @@ class ParameterService:
                     # Check if we need to restart (some changes require restart)
                     if "result" in response_data and "restart_required" in response_data["result"]:
                         logger.info(f"Device {device.id} indicates restart required after parameter change")
-                        
+                        device.restart_required = True
+                        # TODO: Implement device restart functionality
+                    
                     return True
                     
         except Exception as e:
@@ -1526,6 +1528,7 @@ class ParameterService:
                 # Check if restart is required
                 if "result" in response_data and isinstance(response_data["result"], dict) and response_data["result"].get("restart_required", False):
                     logger.info(f"Device {device.id} requires restart after parameter change")
+                    device.restart_required = True
                     # TODO: Implement device restart functionality
                 
                 # Update device eco_mode_enabled if applicable

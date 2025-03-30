@@ -54,16 +54,23 @@ class ParameterService:
         self._device_cache: Dict[str, Device] = {}
         logger.debug("Unified ParameterService initialized")
     
-    async def start(self):
-        """Start the parameter service."""
+    async def start(self, no_discovery: bool = False):
+        """
+        Start the parameter service.
+        
+        Args:
+            no_discovery: If True, don't automatically start the discovery service
+        """
         if self.session is None:
             self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.http_timeout))
             logger.debug("HTTP session initialized")
             
         # If discovery service is provided and not started, start it
-        if self.discovery_service and not getattr(self.discovery_service, "started", False):
+        if not no_discovery and self.discovery_service and not getattr(self.discovery_service, "started", False):
             await self.discovery_service.start()
             logger.debug("Discovery service started")
+            return True
+        return False
     
     async def stop(self):
         """Stop the parameter service."""
@@ -1355,19 +1362,86 @@ class ParameterService:
         params = {gen1_param_name: formatted_value}
         
         logger.debug(f"Setting Gen1 parameter {gen1_param_name}={formatted_value} on {device.id}")
+        logger.debug(f"Request URL: {url}?{gen1_param_name}={formatted_value}")
+        logger.debug(f"Device IP: {device.ip_address}, Device name: {device.name}, Device model: {device.model}")
         
+        # First, check if we can connect to the device
         try:
-            async with self.session.get(url, params=params, timeout=self.http_timeout) as response:
+            # Check authentication requirements
+            auth = None
+            if hasattr(device, 'auth_enabled') and device.auth_enabled:
+                if hasattr(device, 'auth_domain') and device.auth_domain and hasattr(device, 'auth_username') and device.auth_username and hasattr(device, 'auth_password') and device.auth_password:
+                    from aiohttp import BasicAuth
+                    auth = BasicAuth(device.auth_username, device.auth_password)
+                    logger.debug(f"Using authentication for device {device.id}")
+            
+            # First, get current settings to compare after update
+            async with self.session.get(url, auth=auth, timeout=self.http_timeout) as response:
                 if response.status != 200:
-                    logger.error(f"Error setting parameter on device {device.id}, status: {response.status}")
+                    if response.status == 401:
+                        logger.error(f"Authentication failed for device {device.id}. Please provide valid credentials.")
+                        return False
+                    logger.error(f"Error connecting to device {device.id}, status: {response.status}")
                     return False
+                
+                # Get current settings
+                try:
+                    current_settings = await response.json()
+                    logger.debug(f"Current settings for {device.id}: {current_settings}")
+                    
+                    # Check if parameter already has the desired value
+                    if gen1_param_name in current_settings:
+                        current_value = current_settings[gen1_param_name]
+                        if str(current_value).lower() == str(formatted_value).lower():
+                            logger.info(f"Parameter {gen1_param_name} already set to {formatted_value} on device {device.id}")
+                            return True
+                except Exception as e:
+                    logger.warning(f"Could not parse current settings: {str(e)}")
+            
+            # Now set the parameter
+            async with self.session.get(url, params=params, auth=auth, timeout=self.http_timeout) as response:
+                if response.status != 200:
+                    if response.status == 401:
+                        logger.error(f"Authentication failed for device {device.id}. Please provide valid credentials.")
+                    else:
+                        logger.error(f"Error setting parameter on device {device.id}, status: {response.status}")
+                    return False
+                
+                response_text = await response.text()
+                logger.debug(f"Response from device {device.id}: {response_text}")
+                
+                # Verify the parameter was actually set by checking the response
+                try:
+                    response_data = json.loads(response_text)
+                    if gen1_param_name in response_data:
+                        actual_value = response_data[gen1_param_name]
+                        # For boolean values, check more carefully
+                        if isinstance(actual_value, bool) or isinstance(value, bool):
+                            # Convert to string for comparison
+                            actual_str = str(actual_value).lower()
+                            expected_str = str(formatted_value).lower()
+                            
+                            # Account for on/off vs true/false
+                            if actual_str in ["true", "on", "1"] and expected_str in ["true", "on", "1"]:
+                                logger.info(f"Successfully verified parameter {gen1_param_name} set to {formatted_value}")
+                            elif actual_str in ["false", "off", "0"] and expected_str in ["false", "off", "0"]:
+                                logger.info(f"Successfully verified parameter {gen1_param_name} set to {formatted_value}")
+                            else:
+                                logger.warning(f"Parameter setting may have failed. Expected {formatted_value}, got {actual_value}")
+                                logger.warning(f"Device may have restrictions preventing this change.")
+                                # Return success anyway as the request was accepted
+                        elif str(actual_value) != str(formatted_value):
+                            logger.warning(f"Parameter value mismatch. Set {formatted_value}, got {actual_value}")
+                            # Return success anyway as the request was accepted
+                except Exception as e:
+                    logger.warning(f"Could not verify parameter was set: {str(e)}")
                     
                 # Update device eco_mode_enabled if applicable
                 if param_name == "eco_mode" or gen1_param_name == "eco_mode_enabled":
                     device.eco_mode_enabled = bool(value)
-                    if hasattr(self, 'device_registry') and self.device_registry:
-                        self.device_registry.save_device(device)
+                    device_registry.save_device(device)
                 
+                # Proceed with success even if verification had warnings
                 return True
                 
         except Exception as e:

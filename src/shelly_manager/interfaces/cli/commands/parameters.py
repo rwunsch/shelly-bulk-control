@@ -15,6 +15,7 @@ from shelly_manager.discovery.discovery_service import DiscoveryService
 from shelly_manager.parameter.parameter_service import ParameterService
 from shelly_manager.utils.logging import LogConfig, get_logger
 from shelly_manager.models.device_registry import device_registry
+from shelly_manager.models.device import DeviceGeneration
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -270,6 +271,7 @@ def set_parameter(
     device_id: str = typer.Argument(..., help="Device ID to set parameter on"),
     parameter_name: str = typer.Argument(..., help="Name of the parameter to set"),
     value: str = typer.Argument(..., help="Value to set"),
+    reboot: bool = typer.Option(False, "--reboot", help="Reboot device after setting parameter"),
     debug: bool = typer.Option(False, "--debug", help="Enable debug logging")
 ):
     """
@@ -281,6 +283,9 @@ def set_parameter(
           
         - Set the max_power parameter on a device:
           shelly-bulk-control parameters set shellyplug-s-12345 max_power 2000
+          
+        - Set parameter and reboot the device:
+          shelly-bulk-control parameters set shellyplug-s-12345 eco_mode true --reboot
     """
     try:
         # Configure logging
@@ -296,7 +301,7 @@ def set_parameter(
         parsed_value = _parse_value(value)
         
         # Run the operation asynchronously
-        asyncio.run(_set_parameter_async(device_id, parameter_name, parsed_value, debug))
+        asyncio.run(_set_parameter_async(device_id, parameter_name, parsed_value, reboot, debug))
         
     except Exception as e:
         logger.error(f"Failed to set parameter: {str(e)}")
@@ -338,7 +343,7 @@ def _parse_value(value_str: str) -> Any:
     return value_str
 
 
-async def _set_parameter_async(device_id: str, parameter_name: str, value: Any, debug: bool):
+async def _set_parameter_async(device_id: str, parameter_name: str, value: Any, reboot: bool, debug: bool):
     """
     Set a parameter asynchronously.
     
@@ -346,15 +351,18 @@ async def _set_parameter_async(device_id: str, parameter_name: str, value: Any, 
         device_id: Device ID to set parameter on
         parameter_name: Name of the parameter
         value: Value to set
+        reboot: Whether to reboot after setting
         debug: Whether to enable debug logging
     """
-    # Initialize services
+    # Initialize services without starting discovery yet
     discovery_service = DiscoveryService()
     group_manager = GroupManager()
     parameter_service = ParameterService(group_manager, discovery_service)
     
-    # Start services
-    await parameter_service.start()
+    discovery_started = False
+    
+    # Start parameter service only - without discovery
+    await parameter_service.start(no_discovery=True)
     
     try:
         # Use cached devices first, specifically using device_registry
@@ -370,12 +378,18 @@ async def _set_parameter_async(device_id: str, parameter_name: str, value: Any, 
         mac_address = device_id.replace(":", "").upper()
         device = device_registry.get_device(mac_address)
         
+        # Check if the device has a valid IP address
+        if device and not device.ip_address:
+            logger.warning(f"Device found in registry but has no IP address: {device.id}")
+            device = None  # Force discovery to find the IP
+        
         # If device still not found, start discovery service but try to avoid full network scanning
         if not device:
-            console.print("Device not found in registry. Starting discovery service...")
+            console.print("Device not found in registry with valid IP. Starting discovery service...")
             
-            # Now start discovery service as it might be needed
+            # Only start discovery service if we actually need it
             await discovery_service.start()
+            discovery_started = True
             
             # Check if get_device method exists
             if hasattr(discovery_service, 'get_device'):
@@ -390,10 +404,13 @@ async def _set_parameter_async(device_id: str, parameter_name: str, value: Any, 
                             device = d
                             break
             
-            # Last resort: do a full discovery, but only if absolutely necessary
+            # Last resort: do a minimal discovery targeting only our device
             if not device:
-                console.print("Device not found in cache. Discovering devices...")
-                await discovery_service.discover_devices()
+                console.print("Device not found in cache. Attempting targeted discovery...")
+                # Create a list of the device ID to specifically target
+                target_ids = [device_id]
+                # Use a short timeout for faster response
+                await discovery_service.discover_specific_devices(target_ids, scan_timeout=2)
                 
                 # Try to get the device again
                 if hasattr(discovery_service, 'get_device'):
@@ -407,34 +424,6 @@ async def _set_parameter_async(device_id: str, parameter_name: str, value: Any, 
                             if d.id == device_id:
                                 device = d
                                 break
-                else:
-                    # For older versions with get_devices method
-                    try:
-                        devices = discovery_service.get_devices()
-                        # Check if devices is a dictionary or a list
-                        if isinstance(devices, dict):
-                            device = devices.get(device_id)
-                        else:
-                            # If devices is a list, find the device by ID
-                            for d in devices:
-                                if d.id == device_id:
-                                    device = d
-                                    break
-                    except TypeError:
-                        # Handle the case where get_devices might need parameters
-                        try:
-                            devices = discovery_service.get_devices(None)
-                            if isinstance(devices, dict):
-                                device = devices.get(device_id)
-                            else:
-                                # If devices is a list, find the device by ID
-                                for d in devices:
-                                    if d.id == device_id:
-                                        device = d
-                                        break
-                        except Exception as e:
-                            logger.warning(f"Error getting devices: {str(e)}")
-                            console.print(f"[yellow]Warning: Could not get device list. Trying alternative methods.[/yellow]")
         
         if not device:
             console.print(f"[red]Device '{device_id}' not found[/red]")
@@ -442,18 +431,97 @@ async def _set_parameter_async(device_id: str, parameter_name: str, value: Any, 
             
         # Set parameter value
         console.print(f"Setting parameter '{parameter_name}' on {device.name}...")
+        
+        # Make sure the device has an IP address
+        if not device.ip_address:
+            console.print(f"[yellow]Warning: Device {device.id} has no IP address. Trying to find IP address...[/yellow]")
+            # If we need to look up the IP, start discovery if not already started
+            if not discovery_started:
+                await discovery_service.start()
+                discovery_started = True
+                # Try to find the device with mDNS
+                await discovery_service.discover_specific_devices([device.id], scan_timeout=2)
+                # Try to get updated device info
+                if hasattr(discovery_service, 'get_device'):
+                    updated_device = discovery_service.get_device(device.id)
+                    if updated_device and updated_device.ip_address:
+                        device = updated_device
+                        console.print(f"[green]Found IP address for device: {device.ip_address}[/green]")
+        
         success = await parameter_service.set_parameter_value(device, parameter_name, value)
         
         if success:
             console.print(f"[green]Successfully set parameter '{parameter_name}' to {value}[/green]")
+            
+            # Reboot device if requested
+            if reboot:
+                console.print(f"Rebooting device {device.name}...")
+                reboot_success = await _reboot_device(device, parameter_service.session)
+                if reboot_success:
+                    console.print(f"[green]Device {device.name} is rebooting[/green]")
+                else:
+                    console.print(f"[yellow]Warning: Could not reboot device {device.name}[/yellow]")
         else:
             console.print(f"[red]Failed to set parameter '{parameter_name}' on device {device.id}[/red]")
         
     finally:
         # Stop services
         await parameter_service.stop()
-        if discovery_service and hasattr(discovery_service, 'started') and discovery_service.started:
+        if discovery_started:
             await discovery_service.stop()
+
+
+async def _reboot_device(device, session) -> bool:
+    """
+    Reboot a device.
+    
+    Args:
+        device: The device to reboot
+        session: aiohttp ClientSession to use for requests
+        
+    Returns:
+        Success status
+    """
+    if not device.ip_address:
+        logger.error(f"Cannot reboot device: {device.id} has no IP address")
+        return False
+    
+    try:
+        if device.generation == DeviceGeneration.GEN1:
+            # Gen1 reboot endpoint
+            url = f"http://{device.ip_address}/reboot"
+            async with session.get(url, timeout=5) as response:
+                if response.status == 200:
+                    logger.info(f"Successfully sent reboot command to Gen1 device {device.id}")
+                    return True
+                else:
+                    logger.error(f"Failed to reboot Gen1 device {device.id}, status: {response.status}")
+                    return False
+        else:
+            # Gen2/Gen3 reboot method
+            url = f"http://{device.ip_address}/rpc"
+            payload = {
+                "id": 1,
+                "src": "shelly-bulk-control",
+                "method": "Shelly.Reboot",
+                "params": {}
+            }
+            
+            async with session.post(url, json=payload, timeout=5) as response:
+                if response.status == 200:
+                    response_data = await response.json()
+                    if "result" in response_data:
+                        logger.info(f"Successfully sent reboot command to Gen2/Gen3 device {device.id}")
+                        return True
+                    else:
+                        logger.error(f"Invalid response from Gen2/Gen3 device {device.id}: {response_data}")
+                        return False
+                else:
+                    logger.error(f"Failed to reboot Gen2/Gen3 device {device.id}, status: {response.status}")
+                    return False
+    except Exception as e:
+        logger.error(f"Error rebooting device {device.id}: {str(e)}")
+        return False
 
 
 @app.command("apply")

@@ -86,11 +86,21 @@ class ParameterDefinition:
             
         return False
         
-    def format_value_for_gen1(self, value: Any) -> Any:
-        """Format a value for Gen1 API."""
+    def format_value_for_gen1(self, value: Any) -> str:
+        """Format a value for the Gen1 API."""
         if self.parameter_type == ParameterType.BOOLEAN:
-            return "on" if value else "off"
-        return value
+            # Convert boolean values to strings
+            # For eco_mode specifically, use true/false instead of on/off
+            if self.name == "eco_mode" or self.name == "eco_mode_enabled":
+                return "true" if value else "false"
+            else:
+                return "on" if value else "off"
+        elif self.parameter_type == ParameterType.INTEGER:
+            return str(int(value))
+        elif self.parameter_type == ParameterType.FLOAT:
+            return str(float(value))
+        else:
+            return str(value)
         
     def format_value_for_gen2(self, value: Any) -> Any:
         """Format a value for Gen2 API."""

@@ -318,5 +318,21 @@ class DeviceRegistry:
         logger.info(f"Loaded {len(loaded_devices)} devices from {self.devices_dir}")
         return loaded_devices
 
+    def get_device_by_ip(self, ip_address: str) -> Optional[Device]:
+        """
+        Find a device by IP address.
+        
+        Args:
+            ip_address: IP address to search for
+            
+        Returns:
+            Device if found, None otherwise
+        """
+        self.load_all_devices()
+        for device in self.devices.values():
+            if device.ip_address == ip_address:
+                return device
+        return None
+
 # Create a global instance of the registry
 device_registry = DeviceRegistry() 

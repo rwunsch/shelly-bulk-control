@@ -9,12 +9,13 @@ The parameter management system is now partially implemented with the following 
 - ✅ Standardized parameter names across all device generations
 - ✅ Capability refresh and automatic discovery
 - ✅ Parameter support checking across device types
+- ✅ Parameter reboot functionality with `--reboot` flag
+- ✅ Optimized device discovery for parameter operations
+- ✅ Fixed RPC method for Gen2 devices (Sys.SetConfig)
 
 Next steps for parameter management:
-- Complete the implementation of parameter service operations
-- Add support for batch parameter updates with proper error handling
-- Implement automatic device restart after parameter changes when needed
-- Develop CLI commands for setting parameters on groups of devices
+- ✅ Implement automatic device restart after parameter changes when needed
+- ✅ Develop CLI commands for setting parameters on groups of devices
 - Create helper commands for common parameter operations
 
 ## 2. API Development
@@ -97,18 +98,43 @@ Extend the operation types supported by the system:
 - Support multi-step operation sequences
 - Add conditional branching in operation flows
 
+## 10. Parameter System Enhancements
+
+Further enhance the parameter management system:
+
+- **Add more parameter definitions**: Expand support for other device parameters beyond eco_mode and max_power
+  - Support for MQTT configuration parameters
+  - Support for network configuration parameters
+  - Support for security parameters (auth, cloud connectivity)
+  - Support for sensor thresholds and calibration
+
+- **Improve error handling**: Enhance error messages when parameters aren't supported by specific device models
+  - Clear messages explaining compatibility issues
+  - Suggestions for alternative parameters when available
+  - Device-specific guidance for unsupported operations
+
+- **Create example scripts**: Add more examples showcasing the new features, especially for complex parameter management across device groups
+  - Bulk configuration of devices by type
+  - Migrating configurations between device generations
+  - Automated device provisioning workflows
+
+- **Automated testing**: Develop more automated tests for the parameter service to ensure it handles different device generations correctly
+  - Comprehensive test coverage for all parameter types
+  - Mock testing for API responses
+  - Integration tests with real device responses
+
 ## Getting Started
 
 The work on Parameter Management is well underway with the successful implementation of parameter mapping between device generations. The immediate next steps are:
 
-1. **Complete Parameter Service Updates**:
-   - Update `set_parameter_value` method to properly handle parameter mapping
-   - Implement `restart_device` functionality for both Gen1 and Gen2+ devices
-   - Add `apply_multiple_parameters` method for batch parameter operations
+1. **Parameter System Enhancements**:
+   - Add support for more device parameters beyond eco_mode and max_power
+   - Improve error messages for parameter compatibility issues
+   - Create more example scripts for common parameter operations
+   - Expand automated testing for the parameter service
 
 2. **CLI Command Enhancements**:
-   - Update parameter commands to use the new mapping functionality
-   - Add group parameter operations (apply parameter to all devices in a group)
+   - Add more advanced parameter operations
    - Add support for parameter profiles (multiple parameters at once)
 
 3. **Testing & Validation**:

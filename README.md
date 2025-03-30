@@ -27,8 +27,8 @@ A powerful tool for discovering, managing, and controlling multiple Shelly devic
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/shelly-manager.git
-   cd shelly-manager
+   git clone https://github.com/rwunsch/shelly-bulk-control.git
+   cd shelly-bulk-control
    ```
 
 2. Install the package:
@@ -49,8 +49,8 @@ A powerful tool for discovering, managing, and controlling multiple Shelly devic
 
 1. Clone the repository (using Git Bash, PowerShell, or your preferred tool):
    ```powershell
-   git clone https://github.com/yourusername/shelly-manager.git
-   cd shelly-manager
+   git clone https://github.com/rwunsch/shelly-bulk-control.git
+   cd shelly-bulk-control
    ```
 
 2. Install the package:
@@ -107,7 +107,7 @@ If you're working with WSL, you can install the package in your Linux environmen
 
 ```bash
 # Inside WSL terminal
-cd ~/path/to/shelly-manager
+cd ~/path/to/shelly-bulk-control
 pip install -e .
 shelly-manager --help
 ```

@@ -12,7 +12,7 @@ from rich import box
 
 from shelly_manager.grouping.group_manager import GroupManager
 from shelly_manager.discovery.discovery_service import DiscoveryService
-from shelly_manager.parameters.parameter_service import ParameterService
+from shelly_manager.parameter.parameter_service import ParameterService
 from shelly_manager.utils.logging import LogConfig, get_logger
 
 # Get logger for this module

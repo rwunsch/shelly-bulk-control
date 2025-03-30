@@ -1,3 +1,4 @@
+device_type: Mini1PMG3
 id: Mini1PMG3
 name: Unknown Device
 generation: devicegeneration.gen3
@@ -6,11 +7,15 @@ apis:
     description: 'Gen2/Gen3 RPC method: Shelly.GetStatus'
     response_structure:
       ble: {}
+      bthome:
+        errors:
+        - '...'
       cloud:
         connected: boolean
       input:0:
         id: integer
-        state: 'null'
+        state: boolean
+      knx: {}
       mqtt:
         connected: boolean
       switch:0:
@@ -47,7 +52,7 @@ apis:
         schedule_rev: integer
         webhook_rev: integer
         available_updates:
-          stable: '...'
+          beta: '...'
         reset_reason: integer
       wifi:
         sta_ip: string
@@ -65,6 +70,7 @@ apis:
           enable: '...'
         observer:
           enable: '...'
+      bthome: {}
       cloud:
         enable: boolean
         server: string
@@ -75,11 +81,17 @@ apis:
         enable: boolean
         invert: boolean
         factory_reset: boolean
+      knx:
+        enable: boolean
+        ia: string
+        routing:
+          addr: '...'
       mqtt:
         enable: boolean
         server: 'null'
         client_id: string
         user: 'null'
+        ssl_ca: 'null'
         topic_prefix: string
         rpc_ntf: boolean
         status_ntf: boolean
@@ -152,7 +164,7 @@ apis:
           interval: '...'
       ws:
         enable: boolean
-        server: string
+        server: 'null'
         ssl_ca: string
   Sys.GetStatus:
     description: 'Gen2/Gen3 RPC method: Sys.GetStatus'
@@ -171,7 +183,7 @@ apis:
       schedule_rev: integer
       webhook_rev: integer
       available_updates:
-        stable:
+        beta:
           version: '...'
       reset_reason: integer
   Cloud.GetStatus:
@@ -190,6 +202,7 @@ apis:
       server: 'null'
       client_id: string
       user: 'null'
+      ssl_ca: 'null'
       topic_prefix: string
       rpc_ntf: boolean
       status_ntf: boolean
@@ -242,3 +255,5 @@ parameters:
     description: Energy saving mode
     api: Sys.SetConfig
     parameter_path: device.eco_mode
+type_mappings:
+- Mini1PMG3

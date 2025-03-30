@@ -20,6 +20,8 @@ The system uses a unified parameter service implementation that combines:
 1. **Device Capabilities-based Management**: Intelligently determines API endpoints and parameter paths based on device capabilities.
 2. **Legacy Parameter Definitions**: Maintains backward compatibility with older parameter definition approaches.
 
+The Parameter Service now leverages the [Device Capabilities](Device_Capabilities.md) system as its primary source of information about supported parameters. When a parameter operation is requested, the service first checks if the device has a capability definition and looks up the parameter details there. This provides more accurate and device-specific parameter handling.
+
 The service is designed to be flexible and extensible, with priority given to the device capabilities-based approach for modern devices, falling back to legacy approaches when needed. This ensures reliable operation across diverse device types and firmware versions.
 
 **Note**: Code using the old import path `shelly_manager.parameters.parameter_service` will continue to work but is deprecated. Please update your imports to use `shelly_manager.parameter.parameter_service` instead.

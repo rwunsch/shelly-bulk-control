@@ -1,3 +1,4 @@
+device_type: Mini1G3
 id: Mini1G3
 name: Shelly Mini 1 Gen3
 generation: devicegeneration.gen3
@@ -238,3 +239,5 @@ parameters:
     description: Energy saving mode
     api: Sys.SetConfig
     parameter_path: device.eco_mode
+type_mappings:
+- Mini1G3

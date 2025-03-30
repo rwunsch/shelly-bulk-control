@@ -1,3 +1,4 @@
+device_type: PlusPlugS
 id: PlusPlugS
 name: Shelly Plus Plug S
 generation: devicegeneration.gen2
@@ -235,3 +236,6 @@ parameters:
     description: Energy saving mode
     api: Sys.SetConfig
     parameter_path: device.eco_mode
+type_mappings:
+- PlusPlugS
+- shellyplusplugs

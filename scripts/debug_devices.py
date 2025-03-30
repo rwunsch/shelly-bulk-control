@@ -9,7 +9,7 @@ import logging
 # Add the src directory to the path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from shelly_manager.parameters.parameter_service import ParameterService
+from shelly_manager.parameter.parameter_service import ParameterService
 from shelly_manager.grouping.group_manager import GroupManager
 from shelly_manager.utils.logging import LogConfig
 

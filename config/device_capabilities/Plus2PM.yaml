@@ -1,3 +1,4 @@
+device_type: Plus2PM
 id: Plus2PM
 name: Shelly Plus 2PM
 generation: devicegeneration.gen2
@@ -179,7 +180,7 @@ apis:
           interval: '...'
       ws:
         enable: boolean
-        server: string
+        server: 'null'
         ssl_ca: string
   Sys.GetStatus:
     description: 'Gen2/Gen3 RPC method: Sys.GetStatus'
@@ -270,3 +271,5 @@ parameters:
     description: Energy saving mode
     api: Sys.SetConfig
     parameter_path: device.eco_mode
+type_mappings:
+- Plus2PM

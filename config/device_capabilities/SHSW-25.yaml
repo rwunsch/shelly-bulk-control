@@ -1,3 +1,4 @@
+device_type: SHSW-25
 id: SHSW-25
 name: Unknown Device
 generation: devicegeneration.gen1
@@ -209,6 +210,7 @@ apis:
       auth: boolean
       fw: string
       discoverable: boolean
+      longid: integer
       num_outputs: integer
       num_meters: integer
       num_rollers: integer
@@ -831,3 +833,5 @@ parameters:
     description: Maximum power in watts
     api: settings
     parameter_path: max_power
+type_mappings:
+- SHSW-25

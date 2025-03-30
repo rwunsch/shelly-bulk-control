@@ -1,3 +1,4 @@
+device_type: SHRGBW2
 id: SHRGBW2
 name: Shelly RGBW2
 generation: devicegeneration.gen1
@@ -824,3 +825,5 @@ parameters:
     description: MQTT server address
     api: settings
     parameter_path: mqtt.server
+type_mappings:
+- SHRGBW2

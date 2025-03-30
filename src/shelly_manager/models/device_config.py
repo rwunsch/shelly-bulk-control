@@ -125,13 +125,23 @@ class DeviceConfigManager:
                     logger.debug(f"Matched {generation} device by app (exact): {device_id}")
                     return device_config
             
-            # If no exact match, try contains match
+            # If no exact match, try more specific matches first (longer device IDs)
+            # Sort by length descending so we check longer names first (e.g., Plus1PM before Plus1)
+            sorted_device_ids = sorted(device_types.keys(), key=len, reverse=True)
+            
+            for device_id in sorted_device_ids:
+                device_config = device_types[device_id]
+                # Try to see if the app name contains the device ID
+                logger.debug(f"Trying partial match (specific-first) - {device_id.lower()} vs {raw_app.lower()}")
+                if device_id.lower() in raw_app.lower():
+                    logger.debug(f"Matched {generation} device by app (specific-first): {device_id} - {raw_app}")
+                    return device_config
+            
+            # If still no match, try contains match in either direction
             for device_id, device_config in device_types.items():
-                # Try to see if the app name contains the device ID or vice versa
-                logger.debug(f"Trying partial match - {device_id.lower()} vs {raw_app.lower()}")
-                if (device_id.lower() in raw_app.lower() or 
-                    raw_app.lower() in device_id.lower()):
-                    logger.debug(f"Matched {generation} device by app (partial): {device_id} - {raw_app}")
+                logger.debug(f"Trying fallback partial match - {device_id.lower()} vs {raw_app.lower()}")
+                if raw_app.lower() in device_id.lower():
+                    logger.debug(f"Matched {generation} device by app (fallback): {device_id} - {raw_app}")
                     return device_config
         
         # Additional mapping for special cases - adding common name mappings
@@ -140,9 +150,11 @@ class DeviceConfigManager:
             "plugs": "PlusPlugS",     # Shelly Plus Plug S
             "plug": "PlusPlugS",      # Alternate name
             "plus1pm": "Plus1PM",     # Shelly Plus 1PM
-            "plus1": "Plus1PM",       # Alternate name
+            "plus1": "Plus1",         # Shelly Plus 1 (without PM)
             "plus2pm": "Plus2PM",     # Shelly Plus 2PM
+            "plus2": "Plus2",         # Shelly Plus 2 (without PM)
             "plus4pm": "Plus4PM",     # Shelly Plus 4PM
+            "plus4": "Plus4",         # Shelly Plus 4 (without PM)
             
             # Gen3 mappings
             "mini1pmg3": "Mini1PMG3", # Shelly Mini 1PM Gen3

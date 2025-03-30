@@ -1,3 +1,4 @@
+device_type: SHSW-1
 id: SHSW-1
 name: Shelly 1
 generation: devicegeneration.gen1
@@ -168,7 +169,6 @@ apis:
       auth: boolean
       fw: string
       discoverable: boolean
-      longid: integer
       num_outputs: integer
   settings/actions:
     description: 'Gen1 API endpoint: settings/actions'
@@ -683,3 +683,5 @@ parameters:
     description: MQTT server address
     api: settings
     parameter_path: mqtt.server
+type_mappings:
+- SHSW-1

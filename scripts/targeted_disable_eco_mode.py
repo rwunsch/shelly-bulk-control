@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Script to disable ECO mode on devices in the eco_enabled_small group using targeted approach.
-This approach only probes devices in the group rather than scanning the entire network.
+Script to test the parameter group CLI commands by disabling ECO mode
+on devices in the eco_enabled_small group using the device registry.
 """
 
 import asyncio
@@ -14,18 +14,19 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from shelly_manager.grouping.group_manager import GroupManager
-from shelly_manager.parameters.parameter_service import ParameterService
+from shelly_manager.parameter.parameter_service import ParameterService
+from shelly_manager.models.device_registry import device_registry
 from shelly_manager.utils.logging import LogConfig
 
 # Configure logging
 log_config = LogConfig(
-    app_name="targeted_disable_eco_mode",
+    app_name="test_parameter_group_cli",
     debug=True,
     log_to_file=True,
     log_to_console=True
 )
 log_config.setup()
-logger = logging.getLogger("targeted_disable_eco_mode")
+logger = logging.getLogger("test_parameter_group_cli")
 
 # Group to modify
 GROUP_NAME = "eco_enabled_small"
@@ -33,12 +34,14 @@ PARAMETER_NAME = "eco_mode"
 PARAMETER_VALUE = False
 
 
-async def disable_eco_mode():
+async def test_parameter_group_commands():
     """
-    Disable ECO mode on devices in the specified group using targeted approach.
-    This only probes the devices in the group rather than scanning the entire network.
+    Test the parameter group CLI commands by:
+    1. Getting the current eco_mode status for all devices in the group
+    2. Setting eco_mode to False for all devices in the group
+    3. Verifying the changes took effect
     """
-    logger.info(f"Starting script to disable ECO mode on devices in '{GROUP_NAME}' group")
+    logger.info(f"Testing parameter group CLI commands on '{GROUP_NAME}' group")
     
     # Initialize services
     group_manager = GroupManager()
@@ -54,65 +57,115 @@ async def disable_eco_mode():
         if not group:
             logger.error(f"Group '{GROUP_NAME}' not found")
             return
-            
+        
+        logger.info(f"Group '{GROUP_NAME}' contains {len(group.device_ids)} devices")
+        
         # Make sure devices directory exists
         device_dir = os.path.join("data", "devices")
         if not os.path.exists(device_dir):
             os.makedirs(device_dir, exist_ok=True)
             logger.info(f"Created device storage directory: {device_dir}")
         
-        # Apply parameter change
-        logger.info(f"Applying parameter '{PARAMETER_NAME}={PARAMETER_VALUE}' to group '{GROUP_NAME}'")
+        # Load devices from registry
+        logger.info(f"Loading devices for group '{GROUP_NAME}' from registry")
+        devices = await parameter_service.load_devices_for_group(GROUP_NAME)
+        
+        if not devices:
+            logger.error(f"No devices found in group '{GROUP_NAME}'")
+            return
+            
+        logger.info(f"Loaded {len(devices)} devices from registry")
         
         # Debug: Print device details
-        devices = await parameter_service.load_devices_for_group(GROUP_NAME)
         for device in devices:
             logger.info(f"Device details: ID={device.id}, Model={device.model}, Gen={device.generation}, IP={device.ip_address}")
-            params = parameter_service.get_device_parameters(device)
-            logger.info(f"  Parameters supported: {list(params.keys())}")
         
-        result = await parameter_service.apply_parameter_to_group(GROUP_NAME, PARAMETER_NAME, PARAMETER_VALUE)
+        # STEP 1: Get current eco_mode status for all devices in the group
+        logger.info(f"Getting current '{PARAMETER_NAME}' status for all devices in '{GROUP_NAME}'")
+        get_result = await parameter_service.get_parameter_for_group(GROUP_NAME, PARAMETER_NAME)
         
-        # Print results
-        if "error" in result:
-            logger.error(f"Error applying parameter: {result['error']}")
+        if "error" in get_result:
+            logger.error(f"Error getting parameter: {get_result['error']}")
             return
-            
-        if "warning" in result:
-            logger.warning(f"Warning applying parameter: {result['warning']}")
+        
+        logger.info(f"Current status: {get_result['success_count']}/{get_result['device_count']} devices responded")
+        
+        # Print current values
+        for device_id, result in get_result.get("results", {}).items():
+            if "error" in result:
+                logger.warning(f"Device {device_id}: Error - {result['error']}")
+            else:
+                value = result.get("value")
+                logger.info(f"Device {device_id}: {PARAMETER_NAME} = {value}")
+        
+        # STEP 2: Set eco_mode to False for all devices in the group
+        logger.info(f"Setting '{PARAMETER_NAME}={PARAMETER_VALUE}' for all devices in '{GROUP_NAME}'")
+        set_result = await parameter_service.set_parameter_for_group(GROUP_NAME, PARAMETER_NAME, PARAMETER_VALUE)
+        
+        if "error" in set_result:
+            logger.error(f"Error setting parameter: {set_result['error']}")
             return
-            
-        # Log detailed results
-        logger.info(f"Parameter applied to {result['device_count']} devices")
         
-        success_count = sum(1 for r in result["results"].values() if r.get("success", False))
-        if result["device_count"] > 0:
-            success_rate = success_count / result["device_count"] * 100
-            logger.info(f"Success rate: {success_count}/{result['device_count']} ({success_rate:.0f}%)")
+        logger.info(f"Set status: {set_result['success_count']}/{set_result['device_count']} devices updated")
         
-        # Log failures
-        for device_id, device_result in result["results"].items():
-            if not device_result.get("success", False):
-                error = device_result.get("error", "Unknown error")
-                logger.error(f"Failed to apply parameter to device {device_id}: {error}")
+        # STEP 3: Verify the changes took effect
+        logger.info(f"Verifying '{PARAMETER_NAME}' was set to '{PARAMETER_VALUE}' for all devices")
+        verify_result = await parameter_service.get_parameter_for_group(GROUP_NAME, PARAMETER_NAME)
         
-        # Log successful operation
-        if success_count == result["device_count"]:
-            logger.info(f"Successfully disabled ECO mode on all devices in '{GROUP_NAME}' group")
+        if "error" in verify_result:
+            logger.error(f"Error verifying parameter: {verify_result['error']}")
+            return
+        
+        # Check if all devices have the expected value
+        success_count = 0
+        for device_id, result in verify_result.get("results", {}).items():
+            if "error" in result:
+                logger.warning(f"Device {device_id}: Error - {result['error']}")
+            else:
+                value = result.get("value")
+                if value == PARAMETER_VALUE:
+                    success_count += 1
+                    logger.info(f"Device {device_id}: {PARAMETER_NAME} = {value} ✓")
+                else:
+                    logger.warning(f"Device {device_id}: {PARAMETER_NAME} = {value} ✗ (Expected {PARAMETER_VALUE})")
+        
+        # Calculate success rate
+        if verify_result["device_count"] > 0:
+            success_rate = success_count / verify_result["device_count"] * 100
+            logger.info(f"Verification success rate: {success_count}/{verify_result['device_count']} ({success_rate:.0f}%)")
+        
+        # STEP 4: Test parameter profile application
+        logger.info("Testing parameter profile application")
+        profile = {
+            "eco_mode": False,
+            "name": f"Eco-Disabled Device"
+        }
+        
+        profile_result = await parameter_service.apply_parameter_profile(GROUP_NAME, profile)
+        
+        if "error" in profile_result:
+            logger.error(f"Error applying profile: {profile_result['error']}")
+            return
+        
+        logger.info(f"Profile application: {profile_result['success_count']}/{profile_result['total_operations']} operations succeeded")
+        
+        # Summary
+        if success_count == verify_result["device_count"]:
+            logger.info(f"✓ Successfully set {PARAMETER_NAME}={PARAMETER_VALUE} on all devices in '{GROUP_NAME}' group")
         else:
-            logger.warning(f"Disabled ECO mode on {success_count}/{result['device_count']} devices in '{GROUP_NAME}' group")
+            logger.warning(f"⚠ Set {PARAMETER_NAME}={PARAMETER_VALUE} on {success_count}/{verify_result['device_count']} devices in '{GROUP_NAME}' group")
         
     finally:
         # Stop services
         logger.info("Stopping services")
         await parameter_service.stop()
     
-    logger.info("Script completed")
+    logger.info("Test completed")
 
 
 if __name__ == "__main__":
     try:
-        asyncio.run(disable_eco_mode())
+        asyncio.run(test_parameter_group_commands())
     except KeyboardInterrupt:
         logger.info("Script interrupted by user")
     except Exception as e:

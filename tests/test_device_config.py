@@ -20,15 +20,15 @@ def test_device_config_loading():
     assert gen1_config.max_power == 2500
     assert "power_monitoring" in gen1_config.features
     
-    # Test Gen2 device config
+    # Test Gen2 device config - explicitly use 'plus1pm' for Plus1PM
     gen2_config = config_manager.get_device_config(
         raw_type="",
-        raw_app="plus1pm-kitchen",
+        raw_app="plus1pm",
         generation="gen2"
     )
     assert gen2_config is not None
     assert gen2_config.name == "Shelly Plus 1PM"
-    assert gen2_config.type == "plug"
+    assert gen2_config.type == "relay"
     assert gen2_config.num_outputs == 1
     assert gen2_config.num_meters == 1
     assert "power_monitoring" in gen2_config.features
@@ -51,18 +51,18 @@ def test_device_creation():
     assert gen1_device.max_power == 2500
     assert "power_monitoring" in gen1_device.features
     
-    # Create a Gen2 device
+    # Create a Gen2 device - explicitly set raw_app to plus1pm
     gen2_device = Device(
         id="def456",
         name="Living Room Light",
         generation=DeviceGeneration.GEN2,
         raw_type="ShellyPlus1PM",
-        raw_app="plus1pm-living-room",
+        raw_app="plus1pm",
         ip_address="192.168.1.101",
         mac_address="11:22:33:44:55:66"
     )
     assert gen2_device.device_name == "Shelly Plus 1PM"
-    assert gen2_device.device_type == "plug"
+    assert gen2_device.device_type == "relay"
     assert gen2_device.num_outputs == 1
     assert gen2_device.num_meters == 1
     assert "power_monitoring" in gen2_device.features

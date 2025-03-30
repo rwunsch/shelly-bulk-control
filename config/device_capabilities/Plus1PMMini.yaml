@@ -1,5 +1,6 @@
+device_type: Plus1PMMini
 id: Plus1PMMini
-name: Shelly Plus 1
+name: Shelly Plus 1PM
 generation: devicegeneration.gen2
 apis:
   Shelly.GetStatus:
@@ -37,19 +38,17 @@ apis:
         restart_required: boolean
         time: string
         unixtime: integer
-        last_sync_ts: integer
         uptime: integer
         ram_size: integer
         ram_free: integer
-        ram_min_free: integer
         fs_size: integer
         fs_free: integer
         cfg_rev: integer
         kvs_rev: integer
         schedule_rev: integer
         webhook_rev: integer
-        btrelay_rev: integer
-        available_updates: {}
+        available_updates:
+          beta: '...'
         reset_reason: integer
       wifi:
         sta_ip: string
@@ -64,6 +63,8 @@ apis:
       ble:
         enable: boolean
         rpc:
+          enable: '...'
+        observer:
           enable: '...'
       cloud:
         enable: boolean
@@ -100,7 +101,6 @@ apis:
         voltage_limit: integer
         autorecover_voltage_errors: boolean
         current_limit: float
-        reverse: boolean
       sys:
         device:
           name: '...'
@@ -154,7 +154,7 @@ apis:
           interval: '...'
       ws:
         enable: boolean
-        server: string
+        server: 'null'
         ssl_ca: string
   Sys.GetStatus:
     description: 'Gen2/Gen3 RPC method: Sys.GetStatus'
@@ -163,19 +163,18 @@ apis:
       restart_required: boolean
       time: string
       unixtime: integer
-      last_sync_ts: integer
       uptime: integer
       ram_size: integer
       ram_free: integer
-      ram_min_free: integer
       fs_size: integer
       fs_free: integer
       cfg_rev: integer
       kvs_rev: integer
       schedule_rev: integer
       webhook_rev: integer
-      btrelay_rev: integer
-      available_updates: {}
+      available_updates:
+        beta:
+          version: '...'
       reset_reason: integer
   Cloud.GetStatus:
     description: 'Gen2/Gen3 RPC method: Cloud.GetStatus'
@@ -246,3 +245,5 @@ parameters:
     description: Energy saving mode
     api: Sys.SetConfig
     parameter_path: device.eco_mode
+type_mappings:
+- Plus1PMMini

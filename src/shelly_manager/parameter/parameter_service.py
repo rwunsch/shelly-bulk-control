@@ -1049,4 +1049,245 @@ class ParameterService:
             else:
                 # Add leaf values
                 result[new_key] = str(value)
-        return result 
+        return result
+
+    async def get_parameter_for_group(self, group_name: str, parameter_name: str, 
+                                   rate_limit: int = 5) -> Dict[str, Any]:
+        """
+        Get parameter values for all devices in a group.
+        
+        Args:
+            group_name: Name of the group
+            parameter_name: Name of the parameter to get
+            rate_limit: Maximum number of concurrent operations
+            
+        Returns:
+            Dictionary with results for each device
+        """
+        try:
+            # Get the group
+            group = self.group_manager.get_group(group_name)
+            if not group:
+                logger.error(f"Group '{group_name}' not found")
+                return {"error": f"Group '{group_name}' not found"}
+            
+            # Get devices from storage or discovery service
+            devices = await self.load_devices_for_group(group_name)
+            
+            if not devices:
+                return {
+                    "group": group_name,
+                    "parameter": parameter_name,
+                    "device_count": 0,
+                    "warning": f"No devices found in group '{group_name}'"
+                }
+            
+            # Create semaphore for rate limiting
+            semaphore = asyncio.Semaphore(rate_limit)
+            
+            # Function to get parameter with rate limiting
+            async def get_parameter_with_limit(device):
+                async with semaphore:
+                    result = await self.get_parameter(device.id, parameter_name)
+                    return device.id, result
+            
+            # Create tasks for all devices
+            tasks = [get_parameter_with_limit(device) for device in devices]
+            
+            # Wait for all tasks to complete
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results
+            device_results = {}
+            success_count = 0
+            error_count = 0
+            
+            for result in results:
+                if isinstance(result, Exception):
+                    # Handle exception
+                    logger.error(f"Error getting parameter: {result}")
+                    error_count += 1
+                    continue
+                
+                device_id, param_result = result
+                device_results[device_id] = param_result
+                
+                if "error" not in param_result:
+                    success_count += 1
+                else:
+                    error_count += 1
+            
+            # Return consolidated results
+            return {
+                "group": group_name,
+                "parameter": parameter_name,
+                "device_count": len(devices),
+                "success_count": success_count,
+                "error_count": error_count,
+                "results": device_results
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting parameter for group '{group_name}': {str(e)}")
+            return {"error": f"Error: {str(e)}"}
+
+    async def set_parameter_for_group(self, group_name: str, parameter_name: str, value: Any,
+                                   rate_limit: int = 5, validate: bool = True) -> Dict[str, Any]:
+        """
+        Set parameter value for all devices in a group.
+        
+        This is an enhanced version of the apply_parameter method with validation
+        and rate limiting.
+        
+        Args:
+            group_name: Name of the group
+            parameter_name: Name of the parameter to set
+            value: Value to set
+            rate_limit: Maximum number of concurrent operations
+            validate: Whether to validate values against device capabilities
+            
+        Returns:
+            Dictionary with results for each device
+        """
+        try:
+            # Get the group
+            group = self.group_manager.get_group(group_name)
+            if not group:
+                logger.error(f"Group '{group_name}' not found")
+                return {"error": f"Group '{group_name}' not found"}
+            
+            # Get devices from storage or discovery service
+            devices = await self.load_devices_for_group(group_name)
+            
+            if not devices:
+                return {
+                    "group": group_name,
+                    "parameter": parameter_name,
+                    "value": value,
+                    "device_count": 0,
+                    "warning": f"No devices found in group '{group_name}'"
+                }
+            
+            # Create semaphore for rate limiting
+            semaphore = asyncio.Semaphore(rate_limit)
+            
+            # Function to set parameter with rate limiting
+            async def set_parameter_with_limit(device):
+                async with semaphore:
+                    # Validate parameter if required
+                    if validate:
+                        # Try capabilities-based validation
+                        capability = device_capabilities.get_capability_for_device(device)
+                        if capability and capability.has_parameter(parameter_name):
+                            param_details = capability.get_parameter_details(parameter_name)
+                            param_type = param_details.get("type")
+                            
+                            # Basic type validation
+                            if param_type == "boolean" and not isinstance(value, bool):
+                                if not (isinstance(value, str) and value.lower() in ["true", "false"]):
+                                    return device.id, {"error": f"Parameter {parameter_name} expects boolean value"}
+                            elif param_type == "integer" and not isinstance(value, int):
+                                try:
+                                    int(value)
+                                except (ValueError, TypeError):
+                                    return device.id, {"error": f"Parameter {parameter_name} expects integer value"}
+                            elif (param_type == "float" or param_type == "number") and not isinstance(value, (int, float)):
+                                try:
+                                    float(value)
+                                except (ValueError, TypeError):
+                                    return device.id, {"error": f"Parameter {parameter_name} expects numeric value"}
+                    
+                    # Set parameter
+                    result = await self.set_parameter(device.id, parameter_name, value)
+                    return device.id, result
+            
+            # Create tasks for all devices
+            tasks = [set_parameter_with_limit(device) for device in devices]
+            
+            # Wait for all tasks to complete
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results
+            device_results = {}
+            success_count = 0
+            error_count = 0
+            
+            for result in results:
+                if isinstance(result, Exception):
+                    # Handle exception
+                    logger.error(f"Error setting parameter: {result}")
+                    error_count += 1
+                    continue
+                
+                device_id, param_result = result
+                device_results[device_id] = param_result
+                
+                if "error" not in param_result:
+                    success_count += 1
+                else:
+                    error_count += 1
+            
+            # Return consolidated results
+            return {
+                "group": group_name,
+                "parameter": parameter_name,
+                "value": value,
+                "device_count": len(devices),
+                "success_count": success_count,
+                "error_count": error_count,
+                "results": device_results
+            }
+            
+        except Exception as e:
+            logger.error(f"Error setting parameter for group '{group_name}': {str(e)}")
+            return {"error": f"Error: {str(e)}"}
+
+    async def apply_parameter_profile(self, group_name: str, profile: Dict[str, Any],
+                                   rate_limit: int = 5, validate: bool = True) -> Dict[str, Any]:
+        """
+        Apply a parameter profile (multiple parameters) to a group.
+        
+        Args:
+            group_name: Name of the group
+            profile: Dictionary of parameter_name: value pairs
+            rate_limit: Maximum number of concurrent operations
+            validate: Whether to validate values against device capabilities
+            
+        Returns:
+            Dictionary with results for each parameter and device
+        """
+        if not profile:
+            return {
+                "group": group_name,
+                "error": "Empty parameter profile"
+            }
+        
+        # Process each parameter
+        results = {}
+        for param_name, param_value in profile.items():
+            results[param_name] = await self.set_parameter_for_group(
+                group_name, param_name, param_value, rate_limit, validate
+            )
+        
+        # Calculate overall stats
+        total_devices = 0
+        total_success = 0
+        total_errors = 0
+        
+        for param_name, param_result in results.items():
+            if "device_count" in param_result:
+                total_devices = max(total_devices, param_result["device_count"])
+            if "success_count" in param_result:
+                total_success += param_result["success_count"]
+            if "error_count" in param_result:
+                total_errors += param_result["error_count"]
+        
+        return {
+            "group": group_name,
+            "profile": profile,
+            "device_count": total_devices,
+            "total_operations": len(profile) * total_devices,
+            "success_count": total_success,
+            "error_count": total_errors,
+            "results": results
+        } 

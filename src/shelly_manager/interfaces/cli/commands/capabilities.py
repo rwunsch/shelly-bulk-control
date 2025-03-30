@@ -25,7 +25,9 @@ console = Console()
 
 @app.command("list")
 def list_capabilities(
-    device_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by device type")
+    ctx: typer.Context,
+    device_type: Optional[str] = typer.Option(None, "--type", "-t", help="Filter by device type"),
+    parameter: Optional[str] = typer.Option(None, "--parameter", "-p", help="Filter by supported parameter")
 ):
     """
     List available capability definitions.
@@ -352,4 +354,101 @@ def check_parameter(
     if not found:
         console.print(f"[yellow]Parameter '{parameter}' not supported by any known device type[/yellow]")
     else:
-        console.print(table) 
+        console.print(table)
+
+async def _discover_capabilities(device_id: Optional[str], scan_network: bool, 
+                             ip_address: Optional[str], network: Optional[str], 
+                             debug: bool):
+    """Discover capabilities from devices."""
+    # Create capability discovery services
+    capabilities_manager = DeviceCapabilities()
+    discovery_service = DiscoveryService()
+    capability_discovery = CapabilityDiscovery(capabilities_manager)
+    
+    # Start discovery service
+    await discovery_service.start()
+    
+    try:
+        logger.info("Initializing device discovery...")
+        console.print("[bold]Discovering devices...[/bold]")
+        
+        # Discover devices based on options
+        if ip_address:
+            logger.info(f"Scanning specific IP: {ip_address}")
+            console.print(f"Scanning IP: {ip_address}")
+            devices = await discovery_service.discover_devices_by_ip([ip_address])
+        elif network:
+            logger.info(f"Scanning network: {network}")
+            console.print(f"Scanning network: {network}")
+            devices = await discovery_service.discover_devices_by_network(network)
+        elif scan_network:
+            logger.info("Scanning entire local network")
+            console.print("Scanning local network (this may take a while)...")
+            devices = await discovery_service.discover_devices()
+        else:
+            # If no scan options are provided, look for cached devices
+            logger.info("Using cached devices")
+            console.print("Using cached devices...")
+            device_registry.load_all_devices()
+            devices = list(device_registry.get_devices().values())
+            
+            # Filter to specific device if requested
+            if device_id:
+                devices = [d for d in devices if d.id == device_id]
+        
+        if not devices:
+            logger.warning("No devices found")
+            console.print("[yellow]No devices found[/yellow]")
+            return
+        
+        # Filter to specific device if requested
+        if device_id:
+            logger.info(f"Filtering to device: {device_id}")
+            devices = [d for d in devices if d.id == device_id]
+            if not devices:
+                logger.warning(f"Device {device_id} not found")
+                console.print(f"[red]Device {device_id} not found[/red]")
+                return
+        
+        # Report discovered devices
+        logger.info(f"Discovered {len(devices)} devices")
+        console.print(f"[green]Discovered {len(devices)} devices[/green]")
+        
+        # Discover capabilities for each device
+        for device in devices:
+            logger.info(f"Discovering capabilities for {device.id} ({device.name})")
+            console.print(f"\nDiscovering capabilities for [bold]{device.name}[/bold] ({device.id})...")
+            console.print(f"  Type: {device.raw_type if device.raw_type else 'N/A'}")
+            console.print(f"  App: {device.raw_app if device.raw_app else 'N/A'}")
+            console.print(f"  Model: {device.raw_model if device.raw_model else 'N/A'}")
+            console.print(f"  Generation: {device.generation.name}")
+            console.print(f"  IP: {device.ip_address if device.ip_address else 'N/A'}")
+            
+            # Check if we already have this capability
+            existing_capability = capabilities_manager.get_capability_for_device(device)
+            if existing_capability:
+                logger.info(f"Found existing capability definition: {existing_capability.device_type}")
+                console.print(f"[yellow]Found existing capability definition: {existing_capability.device_type}[/yellow]")
+                console.print(f"  Type mappings: {existing_capability.data.get('type_mappings', [])}")
+                continue
+            
+            # Discover capabilities
+            logger.debug(f"Starting capability discovery for {device.id}")
+            capability = await capability_discovery.discover_device_capabilities(device)
+            
+            if capability:
+                logger.info(f"Successfully discovered capabilities for {device.id}")
+                console.print(f"[green]Successfully discovered capabilities for {device.id}[/green]")
+                console.print(f"  Device type: {capability.device_type}")
+                console.print(f"  Name: {capability.name}")
+                console.print(f"  Generation: {capability.generation}")
+                console.print(f"  APIs: {list(capability.apis.keys())}")
+                console.print(f"  Parameters: {list(capability.parameters.keys())}")
+                console.print(f"  Type mappings: {capability.data.get('type_mappings', [])}")
+            else:
+                logger.warning(f"Failed to discover capabilities for {device.id}")
+                console.print(f"[red]Failed to discover capabilities for {device.id}[/red]")
+    
+    finally:
+        # Stop discovery service
+        await discovery_service.stop() 

@@ -124,13 +124,20 @@ class DeviceCapability:
         Returns:
             Dictionary representation of capability
         """
-        return {
-            "id": self.device_type,
+        result = {
+            "device_type": self.device_type,  # Use device_type consistently
+            "id": self.device_type,           # Keep id for backward compatibility
             "name": self.name,
             "generation": self.generation,
             "apis": self.apis,
             "parameters": self.parameters
         }
+        
+        # Include type_mappings if present
+        if "type_mappings" in self.data:
+            result["type_mappings"] = self.data["type_mappings"]
+            
+        return result
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'DeviceCapability':
@@ -143,8 +150,11 @@ class DeviceCapability:
         Returns:
             DeviceCapability instance
         """
+        # Support both 'id' and 'device_type' field names for compatibility
+        device_type = data.get("device_type", data.get("id"))
+        
         return cls(
-            device_type=data.get("id"),
+            device_type=device_type,
             name=data.get("name"),
             generation=data.get("generation"),
             data=data
@@ -178,25 +188,41 @@ class DeviceCapabilities:
         self.load_all_capabilities()
     
     def load_all_capabilities(self) -> None:
-        """Load all capability definitions from YAML files."""
-        if not self.capabilities_dir.exists():
-            logger.warning(f"Capabilities directory {self.capabilities_dir} does not exist")
+        """Load all capability definitions from files."""
+        self.capabilities = {}
+        self._type_to_capability = {}
+        loaded_count = 0
+        
+        if not os.path.exists(self.capabilities_dir):
+            logger.debug(f"Capabilities directory {self.capabilities_dir} does not exist, creating")
+            os.makedirs(self.capabilities_dir, exist_ok=True)
             return
         
-        loaded_count = 0
+        # Iterate through all YAML files in the directory
         for file_path in self.capabilities_dir.glob("*.yaml"):
             try:
+                logger.debug(f"Loading capability from {file_path}")
                 with open(file_path, 'r') as f:
-                    data = yaml.safe_load(f)
+                    try:
+                        capability_data = yaml.safe_load(f)
+                    except yaml.YAMLError as e:
+                        logger.error(f"Failed to parse YAML in {file_path}: {e}")
+                        continue
                 
-                if data and "id" in data:
-                    capability = DeviceCapability.from_dict(data)
+                if capability_data and "device_type" in capability_data:
+                    # Create capability object
+                    capability = DeviceCapability.from_dict(capability_data)
+                    
+                    # Add to capabilities dictionary
                     self.capabilities[capability.device_type] = capability
                     
-                    # Create mappings for device type lookup
-                    if "type_mappings" in data:
-                        for mapping in data["type_mappings"]:
+                    # Add type mappings
+                    if "type_mappings" in capability_data and isinstance(capability_data["type_mappings"], list):
+                        for mapping in capability_data["type_mappings"]:
                             self._type_to_capability[mapping] = capability.device_type
+                            logger.debug(f"Added mapping: {mapping} -> {capability.device_type}")
+                    else:
+                        logger.warning(f"No type_mappings found in {file_path}")
                     
                     loaded_count += 1
                     logger.debug(f"Loaded capability definition for {capability.device_type} from {file_path}")
@@ -207,6 +233,7 @@ class DeviceCapabilities:
                 logger.error(f"Failed to load capability from {file_path}: {e}")
         
         logger.info(f"Loaded {loaded_count} device capability definitions")
+        logger.debug(f"Capability mappings: {self._type_to_capability}")
     
     def get_capability_for_device(self, device: Device) -> Optional[DeviceCapability]:
         """
@@ -218,24 +245,30 @@ class DeviceCapabilities:
         Returns:
             DeviceCapability if found, None otherwise
         """
+        logger.debug(f"Finding capability for device {device.id} (type={device.raw_type}, app={device.raw_app})")
+        
         # First, try to map by explicit type
         if device.raw_type and device.raw_type in self._type_to_capability:
             cap_id = self._type_to_capability[device.raw_type]
+            logger.debug(f"Found capability {cap_id} via raw_type '{device.raw_type}'")
             return self.capabilities.get(cap_id)
         
         # For Gen2/Gen3, try by raw_app
         if device.raw_app and device.raw_app in self._type_to_capability:
             cap_id = self._type_to_capability[device.raw_app]
+            logger.debug(f"Found capability {cap_id} via raw_app '{device.raw_app}'")
             return self.capabilities.get(cap_id)
         
         # Try by device ID prefix (like "shellyplus1pmmini")
         if device.id:
             for prefix, cap_id in self._type_to_capability.items():
                 if device.id.lower().startswith(prefix.lower()):
+                    logger.debug(f"Found capability {cap_id} via ID prefix match '{prefix}'")
                     return self.capabilities.get(cap_id)
         
         logger.warning(f"No capability definition found for device {device.id} "
                      f"(type={device.raw_type}, app={device.raw_app})")
+        logger.debug(f"Available mappings: {self._type_to_capability}")
         return None
     
     def get_capability(self, capability_id: str) -> Optional[DeviceCapability]:
@@ -278,7 +311,19 @@ class DeviceCapabilities:
             # Update in-memory cache
             self.capabilities[capability.device_type] = capability
             
+            # Update type mapping
+            if "type_mappings" in capability_data:
+                logger.debug(f"Processing type mappings for {capability.device_type}: {capability_data['type_mappings']}")
+                for mapping in capability_data["type_mappings"]:
+                    self._type_to_capability[mapping] = capability.device_type
+                    logger.debug(f"Updated mapping: {mapping} -> {capability.device_type}")
+            else:
+                # Ensure we at least map the device type to itself
+                self._type_to_capability[capability.device_type] = capability.device_type
+                logger.debug(f"Added default mapping: {capability.device_type} -> {capability.device_type}")
+            
             logger.debug(f"Saved capability definition for {capability.device_type} to {filepath}")
+            logger.debug(f"Updated type mappings: {self._type_to_capability}")
             return True
             
         except Exception as e:
@@ -321,6 +366,8 @@ class CapabilityDiscovery:
         try:
             # Determine device type and create capability object
             device_type = self._get_device_type_id(device)
+            logger.info(f"Discovering capabilities for {device.id} as type {device_type}")
+            
             capability = DeviceCapability(
                 device_type=device_type,
                 name=device.device_name or f"Shelly {device_type}",
@@ -335,8 +382,19 @@ class CapabilityDiscovery:
             # Add mappings for device lookup
             if device.raw_type:
                 capability.data["type_mappings"].append(device.raw_type)
+                logger.debug(f"Added type mapping from raw_type: {device.raw_type}")
+                
             if device.raw_app:
                 capability.data["type_mappings"].append(device.raw_app)
+                logger.debug(f"Added type mapping from raw_app: {device.raw_app}")
+                
+            # Extract generic device type from ID if needed (e.g. "shellyplug1pm" from "shellyplug1pm-abc123")
+            if device.id and "-" in device.id:
+                device_type_prefix = device.id.split('-')[0]
+                if (device_type_prefix.lower() not in [m.lower() for m in capability.data["type_mappings"]] and
+                    not any(char.isdigit() for char in device_type_prefix)):  # Avoid adding specific identifiers with digits
+                    capability.data["type_mappings"].append(device_type_prefix.lower())
+                    logger.debug(f"Added type mapping from ID prefix: {device_type_prefix.lower()}")
             
             # Gen1 devices use different APIs than Gen2/Gen3
             if device.generation == DeviceGeneration.GEN1:
@@ -345,6 +403,7 @@ class CapabilityDiscovery:
                 await self._discover_gen2_capabilities(device, capability)
             
             # Save the discovered capability
+            logger.info(f"Saving discovered capability for {device.id} with mappings: {capability.data['type_mappings']}")
             self.capabilities_manager.save_capability(capability)
             
             return capability

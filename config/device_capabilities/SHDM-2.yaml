@@ -1,3 +1,4 @@
+device_type: SHDM-2
 id: SHDM-2
 name: Shelly Dimmer 2
 generation: devicegeneration.gen1
@@ -863,3 +864,5 @@ parameters:
     description: MQTT server address
     api: settings
     parameter_path: mqtt.server
+type_mappings:
+- SHDM-2

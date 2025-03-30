@@ -3,13 +3,14 @@
 import click
 from shelly_manager.discovery.discovery_service import DiscoveryService
 from shelly_manager.utils.logging import get_logger, setup_logging
+from shelly_manager.utils.network import get_default_network
 from rich.table import Table
 from rich.console import Console
 
 # Get logger for this module
 logger = get_logger(__name__)
 
-@click.option('--network', default='192.168.1.0/24', help='Network to scan in CIDR notation (e.g. 192.168.1.0/24)')
+@click.option('--network', help='Network to scan in CIDR notation (e.g. 192.168.1.0/24)')
 @click.option('--force-http', is_flag=True, help='Force HTTP discovery even if mDNS devices are found')
 @click.option('--debug', is_flag=True, help='Enable debug logging')
 @click.option('--ips', help='Comma-separated list of specific IP addresses to probe')
@@ -28,6 +29,17 @@ async def discover(ctx, network, force_http, debug, ips):
         # Parse comma-separated list of IPs
         ip_addresses = [ip.strip() for ip in ips.split(',')]
         logger.info(f"Will probe specific IP addresses: {ip_addresses}")
+
+    # If no network is specified, try to detect the current network
+    if not network:
+        detected_network = get_default_network()
+        if detected_network:
+            network = detected_network
+            logger.info(f"Using detected network: {network}")
+        else:
+            # Fallback to a common home network
+            network = "192.168.1.0/24"
+            logger.warning(f"Could not detect network, using default: {network}")
     
     # Start device discovery
     devices = await discovery_service.discover_devices(

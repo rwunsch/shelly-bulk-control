@@ -1,3 +1,4 @@
+device_type: SHPLG-S
 id: SHPLG-S
 name: Shelly Plug S
 generation: devicegeneration.gen1
@@ -625,3 +626,5 @@ parameters:
     description: Maximum power in watts
     api: settings
     parameter_path: max_power
+type_mappings:
+- SHPLG-S

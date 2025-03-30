@@ -1,3 +1,4 @@
+device_type: SHGS-1
 id: SHGS-1
 name: Shelly Gas
 generation: devicegeneration.gen1
@@ -618,3 +619,5 @@ parameters:
     description: MQTT server address
     api: settings
     parameter_path: mqtt.server
+type_mappings:
+- SHGS-1

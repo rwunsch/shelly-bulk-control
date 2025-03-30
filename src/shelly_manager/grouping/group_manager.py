@@ -7,6 +7,7 @@ import re
 from typing import Dict, List, Optional, Set, Any
 import logging
 from pathlib import Path
+import asyncio
 
 from .models import DeviceGroup
 from ..utils.logging import get_logger
@@ -388,4 +389,43 @@ class GroupManager:
         for group in self.groups.values():
             all_devices.update(group.device_ids)
         
-        return all_devices 
+        return all_devices
+
+    async def operate_group(self, group_name: str, action: str, parameters: Dict[str, Any] = None, 
+                            rate_limit: int = 5) -> Dict[str, Any]:
+        """
+        Operate on all devices in a group.
+        
+        Args:
+            group_name: Name of the group
+            action: Action to perform
+            parameters: Parameters for the action
+            rate_limit: Number of concurrent operations
+        
+        Returns:
+            Dict[str, Any]: Result of the operation
+        """
+        group = self.get_group(group_name)
+        if not group:
+            raise ValueError(f"Group '{group_name}' does not exist")
+        
+        devices = group.device_ids.copy()
+        if not devices:
+            raise ValueError(f"Group '{group_name}' has no devices")
+        
+        # Execute with rate limiting
+        semaphore = asyncio.Semaphore(rate_limit)
+        async def limited_command(device):
+            async with semaphore:
+                return await self.send_command(device, action, parameters)
+        
+        tasks = [limited_command(device) for device in devices]
+        
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        return {
+            "group": group_name,
+            "action": action,
+            "parameters": parameters,
+            "results": results
+        } 

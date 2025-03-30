@@ -1,3 +1,4 @@
+device_type: SHSW-PM
 id: SHSW-PM
 name: Shelly 1PM
 generation: devicegeneration.gen1
@@ -726,3 +727,5 @@ parameters:
     description: Maximum power in watts
     api: settings
     parameter_path: max_power
+type_mappings:
+- SHSW-PM

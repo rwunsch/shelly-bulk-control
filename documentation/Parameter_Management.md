@@ -73,7 +73,17 @@ shelly-bulk-control parameters set shellyplug-s-12345 eco_mode false
 
 # Set max_power parameter to 2000W
 shelly-bulk-control parameters set shellyplug-s-12345 max_power 2000
+
+# Set parameter and reboot the device after setting it
+shelly-bulk-control parameters set shellyplug-s-12345 eco_mode true --reboot
 ```
+
+The parameter setting command has several optimizations:
+- Uses cached devices from the device registry to avoid network scanning when possible
+- Only starts mDNS discovery if the device is not found in the registry
+- Uses targeted discovery when needed to minimize network traffic
+
+**Important Note:** For Gen1 devices, boolean values for eco_mode parameter must be specified as "true" or "false", not "on" or "off".
 
 ### Applying Parameters to Groups
 
@@ -114,38 +124,38 @@ async def main():
     group_manager = GroupManager()
     parameter_service = ParameterService(group_manager, discovery_service)
     
-    # Start services
-    await discovery_service.start()
-    await parameter_service.start()
+    # Start services without starting discovery (optimization)
+    await parameter_service.start(no_discovery=True)
     
     try:
-        # Discover devices
-        devices = await discovery_service.discover_devices()
-        if not devices:
-            print("No devices found")
+        # Check device registry first (to avoid network scanning)
+        device_registry.load_all_devices()
+        device = device_registry.get_device("E868E7EA6333")
+        
+        if not device:
+            # Only use discovery if needed
+            await discovery_service.start()
+            await discovery_service.discover_specific_devices(["E868E7EA6333"])
+            device = discovery_service.get_device("E868E7EA6333")
+        
+        if not device:
+            print("Device not found")
             return
             
-        # Get a device for testing
-        device = devices[0]
-        
-        # Get parameter value using capabilities-based approach
-        result = await parameter_service.get_parameter(device.id, "eco_mode")
-        if "error" not in result:
-            print(f"Current eco_mode value: {result['value']}")
-        
         # Set parameter value on a device
-        result = await parameter_service.set_parameter(device.id, "eco_mode", False)
-        if "error" not in result:
+        success = await parameter_service.set_parameter_value(device, "eco_mode", False)
+        if success:
             print(f"Successfully set eco_mode to false")
+            
+        # Option to reboot device after parameter change
+        if success:
+            await _reboot_device(device, parameter_service.session)
         
-        # Apply parameter to a group
-        result = await parameter_service.apply_parameter("eco_enabled", "eco_mode", False)
-        print(f"Updated {result['success_count']} of {result['device_count']} devices")
-    
     finally:
         # Stop services
         await parameter_service.stop()
-        await discovery_service.stop()
+        if discovery_service.started:
+            await discovery_service.stop()
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -192,9 +202,30 @@ MODEL_PARAMETER_MAP = {
 }
 ```
 
+## Parameter Value Formatting
+
+Different device generations may require different value formats for the same parameter. The system handles this automatically:
+
+- For Gen1 devices, boolean parameters like `eco_mode` are formatted as "true"/"false" values
+- For other Gen1 parameters, boolean values may use "on"/"off" format
+- Gen2/Gen3 devices typically use JSON boolean values (true/false)
+
+These conversions happen automatically in the `format_value_for_gen1` and `format_value_for_gen2` methods.
+
 ## Dynamic Parameter Discovery
 
 The system includes support for dynamically discovering parameters from devices. This can be extended in the future to query devices for their available parameters, allowing for a more flexible and adaptable parameter management system.
+
+## Optimized Device Discovery
+
+To improve performance and reduce network traffic, the parameter service now:
+
+1. Prioritizes the device registry for device lookups
+2. Only starts mDNS discovery if needed
+3. Provides a targeted discovery method to look for specific devices
+4. Skips discovery when devices already have valid IP addresses
+
+This makes parameter setting commands faster and more efficient, especially in environments with many devices.
 
 ## Error Handling
 

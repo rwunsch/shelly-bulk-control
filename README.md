@@ -1,4 +1,4 @@
-# Shelly Bulk Control
+# Shelly Manager
 
 A powerful tool for discovering, managing, and controlling multiple Shelly devices on your network.
 
@@ -20,21 +20,109 @@ A powerful tool for discovering, managing, and controlling multiple Shelly devic
 
 ### Prerequisites
 
-- Python 3.8 or higher
+- Python 3.10 or higher
 - pip package manager
 
-### Setup
+### Linux Installation
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/shelly-bulk-control.git
-   cd shelly-bulk-control
+   git clone https://github.com/yourusername/shelly-manager.git
+   cd shelly-manager
    ```
 
-2. Install dependencies:
+2. Install the package:
    ```bash
-   pip install -r requirements.txt
+   # Install in development mode
+   pip install -e .
+   
+   # Or install regularly
+   pip install .
    ```
+
+3. The `shelly-manager` command should now be available in your terminal:
+   ```bash
+   shelly-manager --help
+   ```
+
+### Windows Installation
+
+1. Clone the repository (using Git Bash, PowerShell, or your preferred tool):
+   ```powershell
+   git clone https://github.com/yourusername/shelly-manager.git
+   cd shelly-manager
+   ```
+
+2. Install the package:
+   ```powershell
+   pip install -e .
+   ```
+
+3. During installation, you may see a warning that the script is not in your PATH. You have several options:
+
+   #### Option 1: Run with full path
+   Look for the warning message that shows where the script was installed, and use the full path:
+   ```powershell
+   C:\Path\To\Python\Scripts\shelly-manager.exe --help
+   ```
+
+   #### Option 2: Add to PATH temporarily
+   ```powershell
+   $env:PATH += ";C:\Path\To\Python\Scripts"
+   shelly-manager --help
+   ```
+
+   #### Option 3: Add to PATH permanently
+   1. Open System Properties (Win+X, then System)
+   2. Click "Advanced system settings"
+   3. Click "Environment Variables"
+   4. Under "User variables", select "Path" and click "Edit"
+   5. Click "New" and add the Scripts directory path
+   6. Click OK on all dialogs
+
+   #### Option 4: Create a PowerShell alias
+   ```powershell
+   # Add this to your PowerShell profile for persistence
+   Set-Alias -Name shelly-manager -Value "C:\Path\To\Python\Scripts\shelly-manager.exe"
+   
+   # Test the alias
+   shelly-manager --help
+   ```
+
+   To make the alias permanent, add the Set-Alias command to your PowerShell profile:
+   ```powershell
+   # Find your profile location
+   echo $PROFILE
+   
+   # Create the profile if it doesn't exist
+   New-Item -Path $PROFILE -ItemType File -Force
+   
+   # Edit the profile and add the Set-Alias line
+   notepad $PROFILE
+   ```
+
+### Using WSL (Windows Subsystem for Linux)
+
+If you're working with WSL, you can install the package in your Linux environment for better network scanning performance:
+
+```bash
+# Inside WSL terminal
+cd ~/path/to/shelly-manager
+pip install -e .
+shelly-manager --help
+```
+
+Alternatively, you can run the WSL version from PowerShell:
+
+```powershell
+# Create a function in PowerShell
+function shelly-manager {
+    wsl -e python -m shelly_manager.interfaces.cli.main $args
+}
+
+# Test it
+shelly-manager --help
+```
 
 ## Usage
 
@@ -42,45 +130,48 @@ A powerful tool for discovering, managing, and controlling multiple Shelly devic
 
 ```bash
 # Discover devices on your network
-shelly-bulk-control discover
+shelly-manager discover
 
 # List all discovered devices
-shelly-bulk-control devices list
+shelly-manager devices list
 
 # Get detailed information about a specific device
-shelly-bulk-control devices info shellyplug-s-12345
+shelly-manager devices info shellyplug-s-12345
 ```
 
 ### Device Capabilities
 
 ```bash
 # List all device capability definitions
-shelly-bulk-control capabilities list
+shelly-manager capabilities list
 
 # Show detailed capabilities for a specific device type
-shelly-bulk-control capabilities show Plus1PM
+shelly-manager capabilities show Plus1PM
 
 # Check which devices support a specific parameter
-shelly-bulk-control capabilities check-parameter eco_mode
+shelly-manager capabilities check-parameter eco_mode
 
 # Refresh all capability definitions (rebuild from scratch)
-shelly-bulk-control capabilities refresh --force
+shelly-manager capabilities refresh --force
 ```
 
 ### Parameter Management
 
 ```bash
 # List available parameters for a device
-shelly-bulk-control parameters list --device shellyplug-s-12345
+shelly-manager parameters list --device shellyplug-s-12345
 
 # Get a parameter value
-shelly-bulk-control parameters get shellyplug-s-12345 eco_mode
+shelly-manager parameters get shellyplug-s-12345 eco_mode
 
 # Set a parameter value
-shelly-bulk-control parameters set shellyplug-s-12345 eco_mode true
+shelly-manager parameters set shellyplug-s-12345 eco_mode true
 
 # Apply a parameter to all devices in a group
-shelly-bulk-control parameters apply living_room eco_mode true
+shelly-manager parameters apply living_room eco_mode true
+
+# Set parameter and reboot devices if needed
+shelly-manager parameters apply living_room eco_mode true --reboot
 ```
 
 ## Device Type Support

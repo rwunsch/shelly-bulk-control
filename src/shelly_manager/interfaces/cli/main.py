@@ -50,7 +50,7 @@ def truncate_firmware(firmware_version: str) -> str:
 @app.callback()
 def main(debug: bool = typer.Option(False, "--debug", help="Enable debug logging")):
     """
-    Shelly Bulk Control CLI - manage and control Shelly devices in bulk
+    Shelly Manager CLI - manage and control Shelly devices
     """
     # Configure logging
     log_config = LogConfig(

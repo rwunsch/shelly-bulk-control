@@ -135,6 +135,7 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+venv-win/
 
 # Spyder project settings
 .spyderproject
@@ -206,3 +207,5 @@ debug_output.txt
 
 # Virtual environment
 .env.local
+documentation/shelly-bulk-control.gif
+documentation/shelly-bulk-controller.mp4

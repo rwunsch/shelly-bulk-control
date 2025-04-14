@@ -31,7 +31,7 @@ gen1_devices:
       - mqtt
       - coap
 
-  SHSW-21:
+  SHSW-L:
     name: "Shelly 1L"
     type: "relay"
     generation: "gen1"
@@ -46,7 +46,7 @@ gen1_devices:
       - coap
       - no_neutral_wire_operation
 
-  SH2.5:
+  SHSW-25:
     name: "Shelly 2.5"
     type: "relay"
     generation: "gen1"
@@ -75,7 +75,7 @@ gen1_devices:
       - mqtt
       - coap
 
-  SHPLG-U:
+  SHPLG-U1:
     name: "Shelly Plug US"
     type: "plug"
     generation: "gen1"
@@ -150,6 +150,57 @@ gen1_devices:
       - mqtt
       - coap
 
+  SHDUO:
+    name: "Shelly Duo"
+    type: "light"
+    generation: "gen1"
+    num_outputs: 1
+    num_meters: 0
+    features:
+      - dimming
+      - color_temperature
+      - cloud_connectivity
+      - mqtt
+      - coap
+
+  SHDUO-GU10:
+    name: "Shelly Duo GU10"
+    type: "light"
+    generation: "gen1"
+    num_outputs: 1
+    num_meters: 0
+    features:
+      - dimming
+      - color_temperature
+      - cloud_connectivity
+      - mqtt
+      - coap
+
+  SHDUO-RGBW:
+    name: "Shelly Duo RGBW"
+    type: "light"
+    generation: "gen1"
+    num_outputs: 1
+    num_meters: 0
+    features:
+      - dimming
+      - color_control
+      - cloud_connectivity
+      - mqtt
+      - coap
+
+  SHVIN:
+    name: "Shelly Vintage"
+    type: "light"
+    generation: "gen1"
+    num_outputs: 1
+    num_meters: 0
+    features:
+      - dimming
+      - cloud_connectivity
+      - mqtt
+      - coap
+
   # Sensors & Controllers
   SHIX3:
     name: "Shelly i3"
@@ -189,7 +240,7 @@ gen1_devices:
       - mqtt
       - coap
 
-  SHHT:
+  SHHT-1:
     name: "Shelly H&T"
     type: "sensor"
     generation: "gen1"
@@ -203,7 +254,7 @@ gen1_devices:
       - mqtt
       - coap
 
-  SHWT:
+  SHWT-1:
     name: "Shelly Flood"
     type: "sensor"
     generation: "gen1"
@@ -245,7 +296,7 @@ gen1_devices:
       - mqtt
       - coap
 
-  SHGS:
+  SHGS-1:
     name: "Shelly Gas"
     type: "sensor"
     generation: "gen1"
@@ -259,7 +310,7 @@ gen1_devices:
       - mqtt
       - coap
 
-  SHSM-01:
+  SHMOS-01:
     name: "Shelly Motion"
     type: "sensor"
     generation: "gen1"
@@ -273,7 +324,7 @@ gen1_devices:
       - mqtt
       - coap
 
-  SHSM-02:
+  SHMOS-02:
     name: "Shelly Motion 2"
     type: "sensor"
     generation: "gen1"
@@ -303,6 +354,18 @@ gen1_devices:
       - mqtt
       - coap
 
+  SHTRV-01:
+    name: "Shelly TRV"
+    type: "climate"
+    generation: "gen1"
+    num_outputs: 0
+    num_meters: 0
+    features:
+      - temperature_control
+      - battery_powered
+      - cloud_connectivity
+      - mqtt
+
 gen2_devices:
   Plus1:
     name: "Shelly Plus 1"
@@ -317,8 +380,37 @@ gen2_devices:
       - websocket
       - scripting
 
+  Plus1UL:
+    name: "Shelly Plus 1 UL"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 1
+    num_meters: 0
+    max_power: 3500
+    features:
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+
   Plus1PM:
     name: "Shelly Plus 1PM"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 3500
+    features:
+      - power_monitoring
+      - eco_mode
+      - led_control
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+
+  Plus1PMUL:
+    name: "Shelly Plus 1PM UL"
     type: "relay"
     generation: "gen2"
     num_outputs: 1
@@ -365,13 +457,13 @@ gen2_devices:
       - websocket
       - scripting
 
-  PlusPlugUS:
-    name: "Shelly Plus Plug US"
+  PlusPlugIT:
+    name: "Shelly Plus Plug IT"
     type: "plug"
     generation: "gen2"
     num_outputs: 1
     num_meters: 1
-    max_power: 1800
+    max_power: 2500
     features:
       - power_monitoring
       - eco_mode
@@ -381,8 +473,24 @@ gen2_devices:
       - websocket
       - scripting
 
-  PlusPlugSUS:
-    name: "Shelly Plus Plug S US"
+  PlusPlugUK:
+    name: "Shelly Plus Plug UK"
+    type: "plug"
+    generation: "gen2"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 2500
+    features:
+      - power_monitoring
+      - eco_mode
+      - led_control
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+
+  PlusPlugUS:
+    name: "Shelly Plus Plug US"
     type: "plug"
     generation: "gen2"
     num_outputs: 1
@@ -426,6 +534,21 @@ gen2_devices:
       - websocket
       - scripting
 
+  Plus2PMUL:
+    name: "Shelly Plus 2PM UL"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 2
+    num_meters: 2
+    max_power: 3500
+    features:
+      - power_monitoring
+      - roller_mode
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+
   Plus4:
     name: "Shelly Plus 4"
     type: "relay"
@@ -455,6 +578,33 @@ gen2_devices:
       - websocket
       - scripting
 
+  Plusi4:
+    name: "Shelly Plus i4"
+    type: "input"
+    generation: "gen2"
+    num_outputs: 0
+    num_meters: 0
+    features:
+      - 4_inputs
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+
+  Plusi4DC:
+    name: "Shelly Plus i4 DC"
+    type: "input"
+    generation: "gen2"
+    num_outputs: 0
+    num_meters: 0
+    features:
+      - 4_inputs
+      - dc_power
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+
   PlusHT:
     name: "Shelly Plus H&T"
     type: "sensor"
@@ -470,50 +620,36 @@ gen2_devices:
       - websocket
       - scripting
 
-  PlusHTBattery:
-    name: "Shelly Plus H&T Battery"
+  PlusSmoke:
+    name: "Shelly Plus Smoke"
     type: "sensor"
     generation: "gen2"
     num_outputs: 0
     num_meters: 0
     features:
-      - temperature_sensor
-      - humidity_sensor
+      - smoke_detection
+      - alarm_sound
       - battery_powered
-      - battery_monitoring
       - cloud_connectivity
       - mqtt
       - websocket
-      - scripting
 
-  PlusI4:
-    name: "Shelly Plus I4"
-    type: "input"
+  PlusWallDim:
+    name: "Shelly Plus Wall Dimmer"
+    type: "dimmer"
     generation: "gen2"
-    num_outputs: 0
-    num_meters: 0
+    num_outputs: 1
+    num_meters: 1
+    max_power: 200
     features:
-      - 4_inputs
+      - dimming
+      - wall_mounting
       - cloud_connectivity
       - mqtt
       - websocket
       - scripting
 
-  PlusI4DC:
-    name: "Shelly Plus I4 DC"
-    type: "input"
-    generation: "gen2"
-    num_outputs: 0
-    num_meters: 0
-    features:
-      - 4_inputs
-      - dc_power
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - scripting
-
-  PlusUNI:
+  PlusUni:
     name: "Shelly Plus UNI"
     type: "relay"
     generation: "gen2"
@@ -527,11 +663,39 @@ gen2_devices:
       - websocket
       - scripting
 
-gen3_devices:
-  Mini1G3:
-    name: "Shelly Mini 1 Gen3"
+  Plus0-10V:
+    name: "Shelly Plus 0-10V Dimmer"
+    type: "dimmer"
+    generation: "gen2"
+    num_outputs: 1
+    num_meters: 0
+    max_power: 0
+    features:
+      - 0_10v_dimming
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+
+  PlusRGBWPM:
+    name: "Shelly Plus RGBW PM"
+    type: "light"
+    generation: "gen2"
+    num_outputs: 4
+    num_meters: 1
+    max_power: 144
+    features:
+      - power_monitoring
+      - color_control
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+
+  Mini1:
+    name: "Shelly Mini 1"
     type: "relay"
-    generation: "gen3"
+    generation: "gen2"
     num_outputs: 1
     num_meters: 0
     max_power: 3500
@@ -539,13 +703,12 @@ gen3_devices:
       - cloud_connectivity
       - mqtt
       - websocket
-      - bluetooth
       - scripting
 
-  Mini1PMGen3:
-    name: "Shelly Mini 1PM Gen3"
+  Mini1PM:
+    name: "Shelly Mini 1PM"
     type: "relay"
-    generation: "gen3"
+    generation: "gen2"
     num_outputs: 1
     num_meters: 1
     max_power: 3500
@@ -554,40 +717,411 @@ gen3_devices:
       - cloud_connectivity
       - mqtt
       - websocket
-      - bluetooth
       - scripting
 
-  MiniPMGen3:
-    name: "Shelly Mini PM Gen3"
-    type: "plug"
-    generation: "gen3"
+  # Pro series devices (moved from gen4 to gen2)
+  Pro1:
+    name: "Shelly Pro 1"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 1
+    num_meters: 0
+    max_power: 4000
+    features:
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  Pro1PM:
+    name: "Shelly Pro 1PM"
+    type: "relay"
+    generation: "gen2"
     num_outputs: 1
     num_meters: 1
-    max_power: 2500
+    max_power: 4000
     features:
       - power_monitoring
       - eco_mode
       - cloud_connectivity
       - mqtt
       - websocket
-      - bluetooth
       - scripting
+      - din_rail_mounting
 
-  i4Gen3:
-    name: "Shelly i4 Gen3"
-    type: "input"
-    generation: "gen3"
-    num_outputs: 0
+  Pro2:
+    name: "Shelly Pro 2"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 2
     num_meters: 0
+    max_power: 4000
     features:
-      - 4_inputs
+      - roller_mode
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  Pro2PM:
+    name: "Shelly Pro 2PM"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 2
+    num_meters: 2
+    max_power: 4000
+    features:
+      - power_monitoring
+      - roller_mode
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  Pro3:
+    name: "Shelly Pro 3"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 3
+    num_meters: 0
+    max_power: 4000
+    features:
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  Pro4PM:
+    name: "Shelly Pro 4PM"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 4
+    num_meters: 4
+    max_power: 4000
+    features:
+      - power_monitoring
+      - roller_mode
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  ProEM:
+    name: "Shelly Pro EM"
+    type: "energy_meter"
+    generation: "gen2"
+    num_outputs: 0
+    num_meters: 2
+    features:
+      - power_monitoring
+      - energy_monitoring
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  Pro3EM:
+    name: "Shelly Pro 3EM"
+    type: "energy_meter"
+    generation: "gen2"
+    num_outputs: 0
+    num_meters: 3
+    features:
+      - power_monitoring
+      - energy_monitoring
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  Pro3EM400:
+    name: "Shelly Pro 3EM-400"
+    type: "energy_meter"
+    generation: "gen2"
+    num_outputs: 0
+    num_meters: 3
+    features:
+      - power_monitoring
+      - energy_monitoring
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  ProEM50:
+    name: "Shelly Pro EM-50"
+    type: "energy_meter"
+    generation: "gen2"
+    num_outputs: 0
+    num_meters: 1
+    features:
+      - power_monitoring
+      - energy_monitoring
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  Pro3EM3CT63:
+    name: "Shelly Pro 3EM-3CT63"
+    type: "energy_meter"
+    generation: "gen2"
+    num_outputs: 0
+    num_meters: 3
+    features:
+      - power_monitoring
+      - energy_monitoring
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  ProDimmer:
+    name: "Shelly Pro Dimmer"
+    type: "dimmer"
+    generation: "gen2"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 350
+    features:
+      - dimming
+      - led_control
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  ProDim1PM:
+    name: "Shelly Pro Dimmer 1PM"
+    type: "dimmer"
+    generation: "gen2"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 350
+    features:
+      - dimming
+      - led_control
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  ProDim2PM:
+    name: "Shelly Pro Dimmer 2PM"
+    type: "dimmer"
+    generation: "gen2"
+    num_outputs: 2
+    num_meters: 2
+    max_power: 350
+    features:
+      - dimming
+      - led_control
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  ProDim0-10V:
+    name: "Shelly Pro Dimmer 0/1-10V PM"
+    type: "dimmer"
+    generation: "gen2"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 0
+    features:
+      - 0_10v_dimming
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+
+  ProRGBWWPM:
+    name: "Shelly Pro RGBWW PM"
+    type: "light"
+    generation: "gen2"
+    num_outputs: 5
+    num_meters: 1
+    max_power: 200
+    features:
+      - power_monitoring
+      - color_control
+      - white_control
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+      
+  ProDualCover:
+    name: "Shelly Pro Dual Cover/Shutter PM"
+    type: "cover"
+    generation: "gen2"
+    num_outputs: 2
+    num_meters: 2
+    max_power: 4000
+    features:
+      - power_monitoring
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - din_rail_mounting
+      
+  Pro1PMMini:
+    name: "Shelly Pro 1PM Mini"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 4000
+    features:
+      - power_monitoring
+      - eco_mode
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - compact_design
+
+  Pro2PMMini:
+    name: "Shelly Pro 2PM Mini"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 2
+    num_meters: 2
+    max_power: 4000
+    features:
+      - power_monitoring
+      - roller_mode
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - compact_design
+
+  Pro3Mini:
+    name: "Shelly Pro 3 Mini"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 3
+    num_meters: 0
+    max_power: 4000
+    features:
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - compact_design
+
+  Pro4PMMini:
+    name: "Shelly Pro 4PM Mini"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 4
+    num_meters: 4
+    max_power: 4000
+    features:
+      - power_monitoring
+      - roller_mode
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - compact_design
+
+  ProEMMini:
+    name: "Shelly Pro EM Mini"
+    type: "energy_meter"
+    generation: "gen2"
+    num_outputs: 0
+    num_meters: 2
+    features:
+      - power_monitoring
+      - energy_monitoring
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - compact_design
+
+  Pro3EMMini:
+    name: "Shelly Pro 3EM Mini"
+    type: "energy_meter"
+    generation: "gen2"
+    num_outputs: 0
+    num_meters: 3
+    features:
+      - power_monitoring
+      - energy_monitoring
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - compact_design
+
+  ProDimmerMini:
+    name: "Shelly Pro Dimmer Mini"
+    type: "dimmer"
+    generation: "gen2"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 350
+    features:
+      - dimming
+      - led_control
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - compact_design
+
+gen3_devices:
+  S3SW-001X16EU:
+    name: "Shelly 1 Gen3"
+    type: "relay"
+    generation: "gen3"
+    num_outputs: 1
+    num_meters: 0
+    max_power: 3500
+    features:
       - cloud_connectivity
       - mqtt
       - websocket
       - bluetooth
+      - matter
       - scripting
 
-  TwoPMGen3:
+  S3SW-PM-001X16EU:
+    name: "Shelly 1PM Gen3"
+    type: "relay"
+    generation: "gen3"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 3500
+    features:
+      - power_monitoring
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - bluetooth
+      - matter
+      - scripting
+
+  S3SW-2PM-001X16EU:
     name: "Shelly 2PM Gen3"
     type: "relay"
     generation: "gen3"
@@ -601,67 +1135,209 @@ gen3_devices:
       - mqtt
       - websocket
       - bluetooth
+      - matter
       - scripting
+
+  S3IX4-001X16EU:
+    name: "Shelly i4 Gen3"
+    type: "input"
+    generation: "gen3"
+    num_outputs: 0
+    num_meters: 0
+    features:
+      - 4_inputs
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - bluetooth
+      - matter
+      - scripting
+
+  S3HT-001X16EU:
+    name: "Shelly H&T Gen3"
+    type: "sensor"
+    generation: "gen3"
+    num_outputs: 0
+    num_meters: 0
+    features:
+      - temperature_sensor
+      - humidity_sensor
+      - battery_powered
+      - cloud_connectivity
+      - mqtt
+      - bluetooth
+      - matter
+
+  S3DM-001X16EU:
+    name: "Shelly Dimmer Gen3"
+    type: "dimmer"
+    generation: "gen3"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 200
+    features:
+      - dimming
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - bluetooth
+      - matter
+      - scripting
+
+  S3DALI-001X16EU:
+    name: "Shelly DALI Dimmer Gen3"
+    type: "dimmer"
+    generation: "gen3"
+    num_outputs: 1
+    num_meters: 0
+    features:
+      - dali_control
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - bluetooth
+      - matter
+      - scripting
+
+  S3PLG-S-001X16EU:
+    name: "Shelly Plug S MTR Gen3"
+    type: "plug"
+    generation: "gen3"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 2500
+    features:
+      - power_monitoring
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - bluetooth
+      - matter
+      - scripting
+
+  S3PLG-OUT-001X16EU:
+    name: "Shelly Outdoor Plug S Gen3"
+    type: "plug"
+    generation: "gen3"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 2500
+    features:
+      - power_monitoring
+      - weather_resistant
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - bluetooth
+      - matter
+      - scripting
+
+  S3EM-001X16EU:
+    name: "Shelly EM Gen3"
+    type: "energy_meter"
+    generation: "gen3"
+    num_outputs: 0
+    num_meters: 2
+    features:
+      - power_monitoring
+      - energy_monitoring
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - bluetooth
+      - matter
+      - scripting
+
+  S3EM-3-001X16EU:
+    name: "Shelly 3EM-63 Gen3"
+    type: "energy_meter"
+    generation: "gen3"
+    num_outputs: 0
+    num_meters: 3
+    features:
+      - power_monitoring
+      - energy_monitoring
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - bluetooth
+      - matter
+      - scripting
+
+  S3SW-MINI-001X16EU:
+    name: "Shelly 1 Mini Gen3"
+    type: "relay"
+    generation: "gen3"
+    num_outputs: 1
+    num_meters: 0
+    max_power: 3500
+    features:
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - bluetooth
+      - matter
+      - scripting
+      - compact_design
+
+  S3SW-PM-MINI-001X16EU:
+    name: "Shelly 1PM Mini Gen3"
+    type: "relay"
+    generation: "gen3"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 3500
+    features:
+      - power_monitoring
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - bluetooth
+      - matter
+      - scripting
+      - compact_design
 
 gen4_devices:
-  Pro1:
-    name: "Shelly Pro 1"
+  S4SW-001X16EU:
+    name: "Shelly 1 Gen4"
     type: "relay"
     generation: "gen4"
     num_outputs: 1
     num_meters: 0
-    max_power: 4000
+    max_power: 3500
     features:
       - cloud_connectivity
       - mqtt
       - websocket
       - bluetooth
-      - wifi6
+      - zigbee
+      - matter
       - scripting
-      - din_rail_mounting
 
-  Pro1PM:
-    name: "Shelly Pro 1PM"
+  S4SW-PM-001X16EU:
+    name: "Shelly 1PM Gen4"
     type: "relay"
     generation: "gen4"
     num_outputs: 1
     num_meters: 1
-    max_power: 4000
+    max_power: 3500
     features:
       - power_monitoring
-      - eco_mode
       - cloud_connectivity
       - mqtt
       - websocket
       - bluetooth
-      - wifi6
+      - zigbee
+      - matter
       - scripting
-      - din_rail_mounting
 
-  Pro2:
-    name: "Shelly Pro 2"
-    type: "relay"
-    generation: "gen4"
-    num_outputs: 2
-    num_meters: 0
-    max_power: 4000
-    features:
-      - roller_mode
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - bluetooth
-      - wifi6
-      - scripting
-      - din_rail_mounting
-
-  Pro2PM:
-    name: "Shelly Pro 2PM"
+  S4SW-2PM-001X16EU:
+    name: "Shelly 2PM Gen4"
     type: "relay"
     generation: "gen4"
     num_outputs: 2
     num_meters: 2
-    max_power: 4000
+    max_power: 3500
     features:
       - power_monitoring
       - roller_mode
@@ -669,46 +1345,47 @@ gen4_devices:
       - mqtt
       - websocket
       - bluetooth
-      - wifi6
+      - zigbee
+      - matter
       - scripting
-      - din_rail_mounting
 
-  Pro3:
-    name: "Shelly Pro 3"
+  S4SW-MINI-001X16EU:
+    name: "Shelly 1 Mini Gen4"
     type: "relay"
     generation: "gen4"
-    num_outputs: 3
+    num_outputs: 1
     num_meters: 0
-    max_power: 4000
+    max_power: 3500
     features:
       - cloud_connectivity
       - mqtt
       - websocket
       - bluetooth
-      - wifi6
+      - zigbee
+      - matter
       - scripting
-      - din_rail_mounting
+      - compact_design
 
-  Pro4PM:
-    name: "Shelly Pro 4PM"
+  S4SW-PM-MINI-001X16EU:
+    name: "Shelly 1PM Mini Gen4"
     type: "relay"
     generation: "gen4"
-    num_outputs: 4
-    num_meters: 4
-    max_power: 4000
+    num_outputs: 1
+    num_meters: 1
+    max_power: 3500
     features:
       - power_monitoring
-      - roller_mode
       - cloud_connectivity
       - mqtt
       - websocket
       - bluetooth
-      - wifi6
+      - zigbee
+      - matter
       - scripting
-      - din_rail_mounting
+      - compact_design
 
-  ProEM:
-    name: "Shelly Pro EM"
+  S4EM-MINI-001X16EU:
+    name: "Shelly EM Mini Gen4"
     type: "energy_meter"
     generation: "gen4"
     num_outputs: 0
@@ -720,164 +1397,7 @@ gen4_devices:
       - mqtt
       - websocket
       - bluetooth
-      - wifi6
-      - scripting
-      - din_rail_mounting
-
-  Pro3EM:
-    name: "Shelly Pro 3EM"
-    type: "energy_meter"
-    generation: "gen4"
-    num_outputs: 0
-    num_meters: 3
-    features:
-      - power_monitoring
-      - energy_monitoring
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - bluetooth
-      - wifi6
-      - scripting
-      - din_rail_mounting
-
-  ProDimmer:
-    name: "Shelly Pro Dimmer"
-    type: "dimmer"
-    generation: "gen4"
-    num_outputs: 1
-    num_meters: 1
-    max_power: 350
-    features:
-      - dimming
-      - led_control
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - bluetooth
-      - wifi6
-      - scripting
-      - din_rail_mounting
-
-  # Pro Mini series
-  Pro1PMMini:
-    name: "Shelly Pro 1PM Mini"
-    type: "relay"
-    generation: "gen4"
-    num_outputs: 1
-    num_meters: 1
-    max_power: 4000
-    features:
-      - power_monitoring
-      - eco_mode
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - bluetooth
-      - wifi6
-      - scripting
-      - compact_design
-
-  Pro2PMMini:
-    name: "Shelly Pro 2PM Mini"
-    type: "relay"
-    generation: "gen4"
-    num_outputs: 2
-    num_meters: 2
-    max_power: 4000
-    features:
-      - power_monitoring
-      - roller_mode
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - bluetooth
-      - wifi6
-      - scripting
-      - compact_design
-
-  Pro3Mini:
-    name: "Shelly Pro 3 Mini"
-    type: "relay"
-    generation: "gen4"
-    num_outputs: 3
-    num_meters: 0
-    max_power: 4000
-    features:
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - bluetooth
-      - wifi6
-      - scripting
-      - compact_design
-
-  Pro4PMMini:
-    name: "Shelly Pro 4PM Mini"
-    type: "relay"
-    generation: "gen4"
-    num_outputs: 4
-    num_meters: 4
-    max_power: 4000
-    features:
-      - power_monitoring
-      - roller_mode
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - bluetooth
-      - wifi6
-      - scripting
-      - compact_design
-
-  ProEMMini:
-    name: "Shelly Pro EM Mini"
-    type: "energy_meter"
-    generation: "gen4"
-    num_outputs: 0
-    num_meters: 2
-    features:
-      - power_monitoring
-      - energy_monitoring
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - bluetooth
-      - wifi6
-      - scripting
-      - compact_design
-
-  Pro3EMMini:
-    name: "Shelly Pro 3EM Mini"
-    type: "energy_meter"
-    generation: "gen4"
-    num_outputs: 0
-    num_meters: 3
-    features:
-      - power_monitoring
-      - energy_monitoring
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - bluetooth
-      - wifi6
-      - scripting
-      - compact_design
-
-  ProDimmerMini:
-    name: "Shelly Pro Dimmer Mini"
-    type: "dimmer"
-    generation: "gen4"
-    num_outputs: 1
-    num_meters: 1
-    max_power: 350
-    features:
-      - dimming
-      - led_control
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - bluetooth
-      - wifi6
+      - zigbee
+      - matter
       - scripting
       - compact_design

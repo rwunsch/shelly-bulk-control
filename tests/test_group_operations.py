@@ -5,6 +5,7 @@ import asyncio
 import sys
 import logging
 from pathlib import Path
+import pytest
 
 # Add the src directory to the path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -25,6 +26,7 @@ log_config.setup()
 logger = logging.getLogger("test_group_operations")
 
 
+@pytest.mark.asyncio
 async def test_group_operations():
     """Test group operations functionality."""
     logger.info("Starting group operations test")
@@ -52,7 +54,7 @@ async def test_group_operations():
         logger.info("Discovering devices")
         await discovery_service.discover_devices()
         
-        devices = discovery_service.get_devices()
+        devices = discovery_service._get_sorted_devices()
         logger.info(f"Discovered {len(devices)} devices")
         
         # Create a group command service

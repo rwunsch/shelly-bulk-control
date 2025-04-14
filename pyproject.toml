@@ -38,4 +38,11 @@ shelly-manager = "shelly_manager.interfaces.cli.main:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["shelly_manager*"] 
+include = ["shelly_manager*"]
+
+[tool.pytest.ini_options]
+markers = [
+    "network: marks tests that require network connectivity",
+]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function" 

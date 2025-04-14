@@ -723,6 +723,73 @@ apis:
         brightness: integer
         time: integer
       eco_mode_enabled: boolean
+  status/meters/0:
+    description: 'Gen1 API endpoint: status/meters/0'
+    response_structure:
+      wifi_sta:
+        connected: boolean
+        ssid: string
+        ip: string
+        rssi: integer
+      cloud:
+        enabled: boolean
+        connected: boolean
+      mqtt:
+        connected: boolean
+      time: string
+      unixtime: integer
+      serial: integer
+      has_update: boolean
+      mac: string
+      cfg_changed_cnt: integer
+      actions_stats:
+        skipped: integer
+      lights:
+      - ison: '...'
+        source: '...'
+        has_timer: '...'
+        timer_started: '...'
+        timer_duration: '...'
+        timer_remaining: '...'
+        mode: '...'
+        brightness: '...'
+        transition: '...'
+      meters:
+      - power: '...'
+        overpower: '...'
+        is_valid: '...'
+        timestamp: '...'
+        counters: '...'
+        total: '...'
+      inputs:
+      - input: '...'
+        event: '...'
+        event_cnt: '...'
+      tmp:
+        tC: float
+        tF: float
+        is_valid: boolean
+      calibrated: boolean
+      calib_progress: integer
+      calib_status: integer
+      calib_running: integer
+      wire_mode: integer
+      forced_neutral: boolean
+      overtemperature: boolean
+      loaderror: integer
+      overpower: boolean
+      debug: integer
+      update:
+        status: string
+        has_update: boolean
+        new_version: string
+        old_version: string
+        beta_version: string
+      ram_total: integer
+      ram_free: integer
+      fs_size: integer
+      fs_free: integer
+      uptime: integer
   settings/cloud:
     description: 'Gen1 API endpoint: settings/cloud'
     response_structure:
@@ -848,26 +915,1471 @@ apis:
         brightness: integer
         time: integer
       eco_mode_enabled: boolean
+  settings/webhooks:
+    description: 'Gen1 API endpoint: settings/webhooks'
+    response_structure:
+      device:
+        type: string
+        mac: string
+        hostname: string
+        num_inputs: integer
+        num_outputs: integer
+        num_meters: integer
+      wifi_ap:
+        enabled: boolean
+        ssid: string
+        key: string
+      wifi_sta:
+        enabled: boolean
+        ssid: string
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      wifi_sta1:
+        enabled: boolean
+        ssid: 'null'
+        ipv4_method: string
+        ip: 'null'
+        gw: 'null'
+        mask: 'null'
+        dns: 'null'
+      ap_roaming:
+        enabled: boolean
+        threshold: integer
+      mqtt:
+        enable: boolean
+        server: string
+        user: string
+        id: string
+        reconnect_timeout_max: float
+        reconnect_timeout_min: float
+        clean_session: boolean
+        keep_alive: integer
+        max_qos: integer
+        retain: boolean
+        update_period: integer
+      coiot:
+        enabled: boolean
+        update_period: integer
+        peer: string
+      sntp:
+        server: string
+        enabled: boolean
+      login:
+        enabled: boolean
+        unprotected: boolean
+        username: string
+      pin_code: string
+      name: string
+      fw: string
+      factory_reset_from_switch: boolean
+      pon_wifi_reset: boolean
+      discoverable: boolean
+      build_info:
+        build_id: string
+        build_timestamp: string
+        build_version: string
+      cloud:
+        enabled: boolean
+        connected: boolean
+      timezone: string
+      lat: float
+      lng: float
+      tzautodetect: boolean
+      tz_utc_offset: integer
+      tz_dst: boolean
+      tz_dst_auto: boolean
+      time: string
+      unixtime: integer
+      led_status_disable: boolean
+      debug_enable: boolean
+      allow_cross_origin: boolean
+      actions:
+        active: boolean
+        names:
+        - '...'
+      hwinfo:
+        hw_revision: string
+        batch_id: integer
+      mode: string
+      pulse_mode: integer
+      pulse_mode_detected: integer
+      pulse_mode_rebooted: integer
+      load_autodetect: integer
+      calibrated: boolean
+      transition: integer
+      fade_rate: integer
+      min_brightness: integer
+      zcross_debounce: integer
+      bypass: boolean
+      lights:
+      - name: '...'
+        ison: '...'
+        default_state: '...'
+        auto_on: '...'
+        auto_off: '...'
+        schedule: '...'
+        night_mode: '...'
+        schedule_rules: '...'
+        btn_type: '...'
+        btn_debounce: '...'
+        swap_inputs: '...'
+      night_mode:
+        enabled: boolean
+        start_time: string
+        end_time: string
+        brightness: integer
+      warm_up:
+        enabled: integer
+        brightness: integer
+        time: integer
+      eco_mode_enabled: boolean
 parameters:
-  name:
-    type: string
-    description: Device name
+  device:
+    type: object
+    description: Parameter device
     api: settings
-    parameter_path: name
+    parameter_path: device
+    read_only: false
+  device_type:
+    type: string
+    description: Parameter device.type
+    api: settings
+    parameter_path: device.type
+    read_only: false
+  device_mac:
+    type: string
+    description: Parameter device.mac
+    api: settings
+    parameter_path: device.mac
+    read_only: true
+  device_hostname:
+    type: string
+    description: Parameter device.hostname
+    api: settings
+    parameter_path: device.hostname
+    read_only: false
+  device_num_inputs:
+    type: integer
+    description: Parameter device.num_inputs
+    api: settings
+    parameter_path: device.num_inputs
+    read_only: false
+  device_num_outputs:
+    type: integer
+    description: Parameter device.num_outputs
+    api: settings
+    parameter_path: device.num_outputs
+    read_only: false
+  device_num_meters:
+    type: integer
+    description: Parameter device.num_meters
+    api: settings
+    parameter_path: device.num_meters
+    read_only: false
+  wifi_ap:
+    type: object
+    description: Parameter wifi_ap
+    api: settings
+    parameter_path: wifi_ap
+    read_only: false
+  wifi_ap_enabled:
+    type: boolean
+    description: Parameter wifi_ap.enabled
+    api: settings
+    parameter_path: wifi_ap.enabled
+    read_only: false
+  wifi_ap_ssid:
+    type: string
+    description: Parameter wifi_ap.ssid
+    api: settings
+    parameter_path: wifi_ap.ssid
+    read_only: true
+  wifi_ap_key:
+    type: string
+    description: Parameter wifi_ap.key
+    api: settings
+    parameter_path: wifi_ap.key
+    read_only: false
+  wifi_sta:
+    type: object
+    description: Parameter wifi_sta
+    api: settings
+    parameter_path: wifi_sta
+    read_only: false
+  wifi_sta_enabled:
+    type: boolean
+    description: Parameter wifi_sta.enabled
+    api: settings
+    parameter_path: wifi_sta.enabled
+    read_only: false
+  wifi_sta_ssid:
+    type: string
+    description: Parameter wifi_sta.ssid
+    api: settings
+    parameter_path: wifi_sta.ssid
+    read_only: true
+  wifi_sta_ipv4_method:
+    type: string
+    description: Parameter wifi_sta.ipv4_method
+    api: settings
+    parameter_path: wifi_sta.ipv4_method
+    read_only: false
+  wifi_sta_ip:
+    type: 'null'
+    description: Parameter wifi_sta.ip
+    api: settings
+    parameter_path: wifi_sta.ip
+    read_only: false
+  wifi_sta_gw:
+    type: 'null'
+    description: Parameter wifi_sta.gw
+    api: settings
+    parameter_path: wifi_sta.gw
+    read_only: false
+  wifi_sta_mask:
+    type: 'null'
+    description: Parameter wifi_sta.mask
+    api: settings
+    parameter_path: wifi_sta.mask
+    read_only: false
+  wifi_sta_dns:
+    type: 'null'
+    description: Parameter wifi_sta.dns
+    api: settings
+    parameter_path: wifi_sta.dns
+    read_only: false
+  wifi_sta1:
+    type: object
+    description: Parameter wifi_sta1
+    api: settings
+    parameter_path: wifi_sta1
+    read_only: false
+  wifi_sta1_enabled:
+    type: boolean
+    description: Parameter wifi_sta1.enabled
+    api: settings
+    parameter_path: wifi_sta1.enabled
+    read_only: false
+  wifi_sta1_ssid:
+    type: 'null'
+    description: Parameter wifi_sta1.ssid
+    api: settings
+    parameter_path: wifi_sta1.ssid
+    read_only: true
+  wifi_sta1_ipv4_method:
+    type: string
+    description: Parameter wifi_sta1.ipv4_method
+    api: settings
+    parameter_path: wifi_sta1.ipv4_method
+    read_only: false
+  wifi_sta1_ip:
+    type: 'null'
+    description: Parameter wifi_sta1.ip
+    api: settings
+    parameter_path: wifi_sta1.ip
+    read_only: false
+  wifi_sta1_gw:
+    type: 'null'
+    description: Parameter wifi_sta1.gw
+    api: settings
+    parameter_path: wifi_sta1.gw
+    read_only: false
+  wifi_sta1_mask:
+    type: 'null'
+    description: Parameter wifi_sta1.mask
+    api: settings
+    parameter_path: wifi_sta1.mask
+    read_only: false
+  wifi_sta1_dns:
+    type: 'null'
+    description: Parameter wifi_sta1.dns
+    api: settings
+    parameter_path: wifi_sta1.dns
+    read_only: false
+  ap_roaming:
+    type: object
+    description: Parameter ap_roaming
+    api: settings
+    parameter_path: ap_roaming
+    read_only: false
+  ap_roaming_enabled:
+    type: boolean
+    description: Parameter ap_roaming.enabled
+    api: settings
+    parameter_path: ap_roaming.enabled
+    read_only: false
+  ap_roaming_threshold:
+    type: integer
+    description: Parameter ap_roaming.threshold
+    api: settings
+    parameter_path: ap_roaming.threshold
+    read_only: false
+  mqtt:
+    type: object
+    description: Parameter mqtt
+    api: settings
+    parameter_path: mqtt
+    read_only: false
   mqtt_enable:
     type: boolean
-    description: Enable MQTT
+    description: Parameter mqtt.enable
     api: settings
     parameter_path: mqtt.enable
+    read_only: false
   mqtt_server:
     type: string
-    description: MQTT server address
+    description: Parameter mqtt.server
     api: settings
     parameter_path: mqtt.server
-  eco_mode:
+    read_only: false
+  mqtt_user:
+    type: string
+    description: Parameter mqtt.user
+    api: settings
+    parameter_path: mqtt.user
+    read_only: false
+  mqtt_id:
+    type: string
+    description: Parameter mqtt.id
+    api: settings
+    parameter_path: mqtt.id
+    read_only: true
+  mqtt_reconnect_timeout_max:
+    type: float
+    description: Parameter mqtt.reconnect_timeout_max
+    api: settings
+    parameter_path: mqtt.reconnect_timeout_max
+    read_only: true
+  mqtt_reconnect_timeout_min:
+    type: float
+    description: Parameter mqtt.reconnect_timeout_min
+    api: settings
+    parameter_path: mqtt.reconnect_timeout_min
+    read_only: true
+  mqtt_clean_session:
     type: boolean
-    description: Energy saving mode
+    description: Parameter mqtt.clean_session
+    api: settings
+    parameter_path: mqtt.clean_session
+    read_only: false
+  mqtt_keep_alive:
+    type: integer
+    description: Parameter mqtt.keep_alive
+    api: settings
+    parameter_path: mqtt.keep_alive
+    read_only: false
+  mqtt_max_qos:
+    type: integer
+    description: Parameter mqtt.max_qos
+    api: settings
+    parameter_path: mqtt.max_qos
+    read_only: false
+  mqtt_retain:
+    type: boolean
+    description: Parameter mqtt.retain
+    api: settings
+    parameter_path: mqtt.retain
+    read_only: false
+  mqtt_update_period:
+    type: integer
+    description: Parameter mqtt.update_period
+    api: settings
+    parameter_path: mqtt.update_period
+    read_only: false
+  coiot:
+    type: object
+    description: Parameter coiot
+    api: settings
+    parameter_path: coiot
+    read_only: false
+  coiot_enabled:
+    type: boolean
+    description: Parameter coiot.enabled
+    api: settings
+    parameter_path: coiot.enabled
+    read_only: false
+  coiot_update_period:
+    type: integer
+    description: Parameter coiot.update_period
+    api: settings
+    parameter_path: coiot.update_period
+    read_only: false
+  coiot_peer:
+    type: string
+    description: Parameter coiot.peer
+    api: settings
+    parameter_path: coiot.peer
+    read_only: false
+  sntp:
+    type: object
+    description: Parameter sntp
+    api: settings
+    parameter_path: sntp
+    read_only: false
+  sntp_server:
+    type: string
+    description: Parameter sntp.server
+    api: settings
+    parameter_path: sntp.server
+    read_only: false
+  sntp_enabled:
+    type: boolean
+    description: Parameter sntp.enabled
+    api: settings
+    parameter_path: sntp.enabled
+    read_only: false
+  login:
+    type: object
+    description: Parameter login
+    api: settings
+    parameter_path: login
+    read_only: false
+  login_enabled:
+    type: boolean
+    description: Parameter login.enabled
+    api: settings
+    parameter_path: login.enabled
+    read_only: false
+  login_unprotected:
+    type: boolean
+    description: Parameter login.unprotected
+    api: settings
+    parameter_path: login.unprotected
+    read_only: false
+  login_username:
+    type: string
+    description: Parameter login.username
+    api: settings
+    parameter_path: login.username
+    read_only: false
+  pin_code:
+    type: string
+    description: Parameter pin_code
+    api: settings
+    parameter_path: pin_code
+    read_only: false
+  name:
+    type: string
+    description: Parameter name
+    api: settings
+    parameter_path: name
+    read_only: false
+  fw:
+    type: string
+    description: Parameter fw
+    api: settings
+    parameter_path: fw
+    read_only: true
+  factory_reset_from_switch:
+    type: boolean
+    description: Parameter factory_reset_from_switch
+    api: settings
+    parameter_path: factory_reset_from_switch
+    read_only: false
+  pon_wifi_reset:
+    type: boolean
+    description: Parameter pon_wifi_reset
+    api: settings
+    parameter_path: pon_wifi_reset
+    read_only: false
+  discoverable:
+    type: boolean
+    description: Parameter discoverable
+    api: settings
+    parameter_path: discoverable
+    read_only: false
+  build_info:
+    type: object
+    description: Parameter build_info
+    api: settings
+    parameter_path: build_info
+    read_only: false
+  build_info_build_id:
+    type: string
+    description: Parameter build_info.build_id
+    api: settings
+    parameter_path: build_info.build_id
+    read_only: true
+  build_info_build_timestamp:
+    type: string
+    description: Parameter build_info.build_timestamp
+    api: settings
+    parameter_path: build_info.build_timestamp
+    read_only: true
+  build_info_build_version:
+    type: string
+    description: Parameter build_info.build_version
+    api: settings
+    parameter_path: build_info.build_version
+    read_only: false
+  cloud:
+    type: object
+    description: Parameter cloud
+    api: settings
+    parameter_path: cloud
+    read_only: false
+  cloud_enabled:
+    type: boolean
+    description: Parameter cloud.enabled
+    api: settings
+    parameter_path: cloud.enabled
+    read_only: false
+  cloud_connected:
+    type: boolean
+    description: Parameter cloud.connected
+    api: settings
+    parameter_path: cloud.connected
+    read_only: false
+  timezone:
+    type: string
+    description: Parameter timezone
+    api: settings
+    parameter_path: timezone
+    read_only: true
+  lat:
+    type: float
+    description: Parameter lat
+    api: settings
+    parameter_path: lat
+    read_only: false
+  lng:
+    type: float
+    description: Parameter lng
+    api: settings
+    parameter_path: lng
+    read_only: false
+  tzautodetect:
+    type: boolean
+    description: Parameter tzautodetect
+    api: settings
+    parameter_path: tzautodetect
+    read_only: false
+  tz_utc_offset:
+    type: integer
+    description: Parameter tz_utc_offset
+    api: settings
+    parameter_path: tz_utc_offset
+    read_only: true
+  tz_dst:
+    type: boolean
+    description: Parameter tz_dst
+    api: settings
+    parameter_path: tz_dst
+    read_only: false
+  tz_dst_auto:
+    type: boolean
+    description: Parameter tz_dst_auto
+    api: settings
+    parameter_path: tz_dst_auto
+    read_only: false
+  time:
+    type: string
+    description: Parameter time
+    api: settings
+    parameter_path: time
+    read_only: true
+  unixtime:
+    type: integer
+    description: Parameter unixtime
+    api: settings
+    parameter_path: unixtime
+    read_only: true
+  led_status_disable:
+    type: boolean
+    description: Parameter led_status_disable
+    api: settings
+    parameter_path: led_status_disable
+    read_only: false
+  debug_enable:
+    type: boolean
+    description: Parameter debug_enable
+    api: settings
+    parameter_path: debug_enable
+    read_only: true
+  allow_cross_origin:
+    type: boolean
+    description: Parameter allow_cross_origin
+    api: settings
+    parameter_path: allow_cross_origin
+    read_only: false
+  actions:
+    type: object
+    description: Parameter actions
+    api: settings
+    parameter_path: actions
+    read_only: false
+  actions_active:
+    type: boolean
+    description: Parameter actions.active
+    api: settings
+    parameter_path: actions.active
+    read_only: false
+  actions_names:
+    type: array
+    description: Parameter actions.names
+    api: settings
+    parameter_path: actions.names
+    read_only: true
+  hwinfo:
+    type: object
+    description: Parameter hwinfo
+    api: settings
+    parameter_path: hwinfo
+    read_only: false
+  hwinfo_hw_revision:
+    type: string
+    description: Parameter hwinfo.hw_revision
+    api: settings
+    parameter_path: hwinfo.hw_revision
+    read_only: false
+  hwinfo_batch_id:
+    type: integer
+    description: Parameter hwinfo.batch_id
+    api: settings
+    parameter_path: hwinfo.batch_id
+    read_only: true
+  mode:
+    type: string
+    description: Parameter mode
+    api: settings
+    parameter_path: mode
+    read_only: false
+  pulse_mode:
+    type: integer
+    description: Parameter pulse_mode
+    api: settings
+    parameter_path: pulse_mode
+    read_only: false
+  pulse_mode_detected:
+    type: integer
+    description: Parameter pulse_mode_detected
+    api: settings
+    parameter_path: pulse_mode_detected
+    read_only: false
+  pulse_mode_rebooted:
+    type: integer
+    description: Parameter pulse_mode_rebooted
+    api: settings
+    parameter_path: pulse_mode_rebooted
+    read_only: false
+  load_autodetect:
+    type: integer
+    description: Parameter load_autodetect
+    api: settings
+    parameter_path: load_autodetect
+    read_only: false
+  calibrated:
+    type: boolean
+    description: Parameter calibrated
+    api: settings
+    parameter_path: calibrated
+    read_only: false
+  transition:
+    type: integer
+    description: Parameter transition
+    api: settings
+    parameter_path: transition
+    read_only: false
+  fade_rate:
+    type: integer
+    description: Parameter fade_rate
+    api: settings
+    parameter_path: fade_rate
+    read_only: false
+  min_brightness:
+    type: integer
+    description: Parameter min_brightness
+    api: settings
+    parameter_path: min_brightness
+    read_only: false
+  zcross_debounce:
+    type: integer
+    description: Parameter zcross_debounce
+    api: settings
+    parameter_path: zcross_debounce
+    read_only: false
+  bypass:
+    type: boolean
+    description: Parameter bypass
+    api: settings
+    parameter_path: bypass
+    read_only: false
+  lights:
+    type: array
+    description: Parameter lights
+    api: settings
+    parameter_path: lights
+    read_only: true
+  lights[0]_name:
+    type: string
+    description: Parameter lights[0].name
+    api: settings
+    parameter_path: lights[0].name
+    read_only: false
+  lights[0]_ison:
+    type: boolean
+    description: Parameter lights[0].ison
+    api: settings
+    parameter_path: lights[0].ison
+    read_only: false
+  lights[0]_default_state:
+    type: string
+    description: Parameter lights[0].default_state
+    api: settings
+    parameter_path: lights[0].default_state
+    read_only: false
+  lights[0]_auto_on:
+    type: float
+    description: Parameter lights[0].auto_on
+    api: settings
+    parameter_path: lights[0].auto_on
+    read_only: false
+  lights[0]_auto_off:
+    type: float
+    description: Parameter lights[0].auto_off
+    api: settings
+    parameter_path: lights[0].auto_off
+    read_only: false
+  lights[0]_schedule:
+    type: boolean
+    description: Parameter lights[0].schedule
+    api: settings
+    parameter_path: lights[0].schedule
+    read_only: false
+  lights[0]_night_mode:
+    type: object
+    description: Parameter lights[0].night_mode
+    api: settings
+    parameter_path: lights[0].night_mode
+    read_only: false
+  lights[0]_night_mode_enabled:
+    type: boolean
+    description: Parameter lights[0].night_mode.enabled
+    api: settings
+    parameter_path: lights[0].night_mode.enabled
+    read_only: false
+  lights[0]_night_mode_start_time:
+    type: string
+    description: Parameter lights[0].night_mode.start_time
+    api: settings
+    parameter_path: lights[0].night_mode.start_time
+    read_only: true
+  lights[0]_night_mode_end_time:
+    type: string
+    description: Parameter lights[0].night_mode.end_time
+    api: settings
+    parameter_path: lights[0].night_mode.end_time
+    read_only: true
+  lights[0]_night_mode_brightness:
+    type: integer
+    description: Parameter lights[0].night_mode.brightness
+    api: settings
+    parameter_path: lights[0].night_mode.brightness
+    read_only: false
+  lights[0]_schedule_rules:
+    type: array
+    description: Parameter lights[0].schedule_rules
+    api: settings
+    parameter_path: lights[0].schedule_rules
+    read_only: true
+  lights[0]_btn_type:
+    type: string
+    description: Parameter lights[0].btn_type
+    api: settings
+    parameter_path: lights[0].btn_type
+    read_only: false
+  lights[0]_btn_debounce:
+    type: integer
+    description: Parameter lights[0].btn_debounce
+    api: settings
+    parameter_path: lights[0].btn_debounce
+    read_only: false
+  lights[0]_swap_inputs:
+    type: integer
+    description: Parameter lights[0].swap_inputs
+    api: settings
+    parameter_path: lights[0].swap_inputs
+    read_only: false
+  night_mode:
+    type: object
+    description: Parameter night_mode
+    api: settings
+    parameter_path: night_mode
+    read_only: false
+  night_mode_enabled:
+    type: boolean
+    description: Parameter night_mode.enabled
+    api: settings
+    parameter_path: night_mode.enabled
+    read_only: false
+  night_mode_start_time:
+    type: string
+    description: Parameter night_mode.start_time
+    api: settings
+    parameter_path: night_mode.start_time
+    read_only: true
+  night_mode_end_time:
+    type: string
+    description: Parameter night_mode.end_time
+    api: settings
+    parameter_path: night_mode.end_time
+    read_only: true
+  night_mode_brightness:
+    type: integer
+    description: Parameter night_mode.brightness
+    api: settings
+    parameter_path: night_mode.brightness
+    read_only: false
+  warm_up:
+    type: object
+    description: Parameter warm_up
+    api: settings
+    parameter_path: warm_up
+    read_only: false
+  warm_up_enabled:
+    type: integer
+    description: Parameter warm_up.enabled
+    api: settings
+    parameter_path: warm_up.enabled
+    read_only: false
+  warm_up_brightness:
+    type: integer
+    description: Parameter warm_up.brightness
+    api: settings
+    parameter_path: warm_up.brightness
+    read_only: false
+  warm_up_time:
+    type: integer
+    description: Parameter warm_up.time
+    api: settings
+    parameter_path: warm_up.time
+    read_only: true
+  eco_mode_enabled:
+    type: boolean
+    description: Parameter eco_mode_enabled
     api: settings
     parameter_path: eco_mode_enabled
+    read_only: false
+  wifi_sta_connected:
+    type: boolean
+    description: Parameter wifi_sta.connected
+    api: status
+    parameter_path: wifi_sta.connected
+    read_only: false
+  wifi_sta_rssi:
+    type: integer
+    description: Parameter wifi_sta.rssi
+    api: status
+    parameter_path: wifi_sta.rssi
+    read_only: false
+  mqtt_connected:
+    type: boolean
+    description: Parameter mqtt.connected
+    api: status
+    parameter_path: mqtt.connected
+    read_only: false
+  serial:
+    type: integer
+    description: Parameter serial
+    api: status
+    parameter_path: serial
+    read_only: true
+  has_update:
+    type: boolean
+    description: Parameter has_update
+    api: status
+    parameter_path: has_update
+    read_only: true
+  mac:
+    type: string
+    description: Parameter mac
+    api: status
+    parameter_path: mac
+    read_only: true
+  cfg_changed_cnt:
+    type: integer
+    description: Parameter cfg_changed_cnt
+    api: status
+    parameter_path: cfg_changed_cnt
+    read_only: false
+  actions_stats:
+    type: object
+    description: Parameter actions_stats
+    api: status
+    parameter_path: actions_stats
+    read_only: false
+  actions_stats_skipped:
+    type: integer
+    description: Parameter actions_stats.skipped
+    api: status
+    parameter_path: actions_stats.skipped
+    read_only: false
+  lights[0]_source:
+    type: string
+    description: Parameter lights[0].source
+    api: status
+    parameter_path: lights[0].source
+    read_only: false
+  lights[0]_has_timer:
+    type: boolean
+    description: Parameter lights[0].has_timer
+    api: status
+    parameter_path: lights[0].has_timer
+    read_only: true
+  lights[0]_timer_started:
+    type: integer
+    description: Parameter lights[0].timer_started
+    api: status
+    parameter_path: lights[0].timer_started
+    read_only: true
+  lights[0]_timer_duration:
+    type: integer
+    description: Parameter lights[0].timer_duration
+    api: status
+    parameter_path: lights[0].timer_duration
+    read_only: true
+  lights[0]_timer_remaining:
+    type: integer
+    description: Parameter lights[0].timer_remaining
+    api: status
+    parameter_path: lights[0].timer_remaining
+    read_only: true
+  lights[0]_mode:
+    type: string
+    description: Parameter lights[0].mode
+    api: status
+    parameter_path: lights[0].mode
+    read_only: false
+  lights[0]_brightness:
+    type: integer
+    description: Parameter lights[0].brightness
+    api: status
+    parameter_path: lights[0].brightness
+    read_only: false
+  lights[0]_transition:
+    type: integer
+    description: Parameter lights[0].transition
+    api: status
+    parameter_path: lights[0].transition
+    read_only: false
+  meters:
+    type: array
+    description: Parameter meters
+    api: status
+    parameter_path: meters
+    read_only: true
+  meters[0]_power:
+    type: float
+    description: Parameter meters[0].power
+    api: status
+    parameter_path: meters[0].power
+    read_only: true
+  meters[0]_overpower:
+    type: float
+    description: Parameter meters[0].overpower
+    api: status
+    parameter_path: meters[0].overpower
+    read_only: true
+  meters[0]_is_valid:
+    type: boolean
+    description: Parameter meters[0].is_valid
+    api: status
+    parameter_path: meters[0].is_valid
+    read_only: true
+  meters[0]_timestamp:
+    type: integer
+    description: Parameter meters[0].timestamp
+    api: status
+    parameter_path: meters[0].timestamp
+    read_only: true
+  meters[0]_counters:
+    type: array
+    description: Parameter meters[0].counters
+    api: status
+    parameter_path: meters[0].counters
+    read_only: true
+  meters[0]_total:
+    type: integer
+    description: Parameter meters[0].total
+    api: status
+    parameter_path: meters[0].total
+    read_only: true
+  inputs:
+    type: array
+    description: Parameter inputs
+    api: status
+    parameter_path: inputs
+    read_only: true
+  inputs[0]_input:
+    type: integer
+    description: Parameter inputs[0].input
+    api: status
+    parameter_path: inputs[0].input
+    read_only: false
+  inputs[0]_event:
+    type: string
+    description: Parameter inputs[0].event
+    api: status
+    parameter_path: inputs[0].event
+    read_only: false
+  inputs[0]_event_cnt:
+    type: integer
+    description: Parameter inputs[0].event_cnt
+    api: status
+    parameter_path: inputs[0].event_cnt
+    read_only: false
+  tmp:
+    type: object
+    description: Parameter tmp
+    api: status
+    parameter_path: tmp
+    read_only: false
+  tmp_tC:
+    type: float
+    description: Parameter tmp.tC
+    api: status
+    parameter_path: tmp.tC
+    read_only: false
+  tmp_tF:
+    type: float
+    description: Parameter tmp.tF
+    api: status
+    parameter_path: tmp.tF
+    read_only: false
+  tmp_is_valid:
+    type: boolean
+    description: Parameter tmp.is_valid
+    api: status
+    parameter_path: tmp.is_valid
+    read_only: true
+  calib_progress:
+    type: integer
+    description: Parameter calib_progress
+    api: status
+    parameter_path: calib_progress
+    read_only: false
+  calib_status:
+    type: integer
+    description: Parameter calib_status
+    api: status
+    parameter_path: calib_status
+    read_only: false
+  calib_running:
+    type: integer
+    description: Parameter calib_running
+    api: status
+    parameter_path: calib_running
+    read_only: false
+  wire_mode:
+    type: integer
+    description: Parameter wire_mode
+    api: status
+    parameter_path: wire_mode
+    read_only: false
+  forced_neutral:
+    type: boolean
+    description: Parameter forced_neutral
+    api: status
+    parameter_path: forced_neutral
+    read_only: false
+  overtemperature:
+    type: boolean
+    description: Parameter overtemperature
+    api: status
+    parameter_path: overtemperature
+    read_only: true
+  loaderror:
+    type: integer
+    description: Parameter loaderror
+    api: status
+    parameter_path: loaderror
+    read_only: false
+  overpower:
+    type: boolean
+    description: Parameter overpower
+    api: status
+    parameter_path: overpower
+    read_only: true
+  debug:
+    type: integer
+    description: Parameter debug
+    api: status
+    parameter_path: debug
+    read_only: false
+  update:
+    type: object
+    description: Parameter update
+    api: status
+    parameter_path: update
+    read_only: false
+  update_status:
+    type: string
+    description: Parameter update.status
+    api: status
+    parameter_path: update.status
+    read_only: true
+  update_has_update:
+    type: boolean
+    description: Parameter update.has_update
+    api: status
+    parameter_path: update.has_update
+    read_only: true
+  update_new_version:
+    type: string
+    description: Parameter update.new_version
+    api: status
+    parameter_path: update.new_version
+    read_only: false
+  update_old_version:
+    type: string
+    description: Parameter update.old_version
+    api: status
+    parameter_path: update.old_version
+    read_only: false
+  update_beta_version:
+    type: string
+    description: Parameter update.beta_version
+    api: status
+    parameter_path: update.beta_version
+    read_only: false
+  ram_total:
+    type: integer
+    description: Parameter ram_total
+    api: status
+    parameter_path: ram_total
+    read_only: true
+  ram_free:
+    type: integer
+    description: Parameter ram_free
+    api: status
+    parameter_path: ram_free
+    read_only: true
+  fs_size:
+    type: integer
+    description: Parameter fs_size
+    api: status
+    parameter_path: fs_size
+    read_only: true
+  fs_free:
+    type: integer
+    description: Parameter fs_free
+    api: status
+    parameter_path: fs_free
+    read_only: true
+  uptime:
+    type: integer
+    description: Parameter uptime
+    api: status
+    parameter_path: uptime
+    read_only: true
+  type:
+    type: string
+    description: Parameter type
+    api: shelly
+    parameter_path: type
+    read_only: false
+  auth:
+    type: boolean
+    description: Parameter auth
+    api: shelly
+    parameter_path: auth
+    read_only: false
+  longid:
+    type: integer
+    description: Parameter longid
+    api: shelly
+    parameter_path: longid
+    read_only: true
+  num_inputs:
+    type: integer
+    description: Parameter num_inputs
+    api: shelly
+    parameter_path: num_inputs
+    read_only: false
+  num_outputs:
+    type: integer
+    description: Parameter num_outputs
+    api: shelly
+    parameter_path: num_outputs
+    read_only: false
+  num_meters:
+    type: integer
+    description: Parameter num_meters
+    api: shelly
+    parameter_path: num_meters
+    read_only: false
+  actions_btn1_on_url:
+    type: array
+    description: Parameter actions.btn1_on_url
+    api: settings/actions
+    parameter_path: actions.btn1_on_url
+    read_only: true
+  actions_btn1_on_url[0]_index:
+    type: integer
+    description: Parameter actions.btn1_on_url[0].index
+    api: settings/actions
+    parameter_path: actions.btn1_on_url[0].index
+    read_only: false
+  actions_btn1_on_url[0]_urls:
+    type: array
+    description: Parameter actions.btn1_on_url[0].urls
+    api: settings/actions
+    parameter_path: actions.btn1_on_url[0].urls
+    read_only: true
+  actions_btn1_on_url[0]_enabled:
+    type: boolean
+    description: Parameter actions.btn1_on_url[0].enabled
+    api: settings/actions
+    parameter_path: actions.btn1_on_url[0].enabled
+    read_only: false
+  actions_btn1_off_url:
+    type: array
+    description: Parameter actions.btn1_off_url
+    api: settings/actions
+    parameter_path: actions.btn1_off_url
+    read_only: true
+  actions_btn1_off_url[0]_index:
+    type: integer
+    description: Parameter actions.btn1_off_url[0].index
+    api: settings/actions
+    parameter_path: actions.btn1_off_url[0].index
+    read_only: false
+  actions_btn1_off_url[0]_urls:
+    type: array
+    description: Parameter actions.btn1_off_url[0].urls
+    api: settings/actions
+    parameter_path: actions.btn1_off_url[0].urls
+    read_only: true
+  actions_btn1_off_url[0]_enabled:
+    type: boolean
+    description: Parameter actions.btn1_off_url[0].enabled
+    api: settings/actions
+    parameter_path: actions.btn1_off_url[0].enabled
+    read_only: false
+  actions_btn1_longpush_url:
+    type: array
+    description: Parameter actions.btn1_longpush_url
+    api: settings/actions
+    parameter_path: actions.btn1_longpush_url
+    read_only: true
+  actions_btn1_longpush_url[0]_index:
+    type: integer
+    description: Parameter actions.btn1_longpush_url[0].index
+    api: settings/actions
+    parameter_path: actions.btn1_longpush_url[0].index
+    read_only: false
+  actions_btn1_longpush_url[0]_urls:
+    type: array
+    description: Parameter actions.btn1_longpush_url[0].urls
+    api: settings/actions
+    parameter_path: actions.btn1_longpush_url[0].urls
+    read_only: true
+  actions_btn1_longpush_url[0]_enabled:
+    type: boolean
+    description: Parameter actions.btn1_longpush_url[0].enabled
+    api: settings/actions
+    parameter_path: actions.btn1_longpush_url[0].enabled
+    read_only: false
+  actions_btn1_shortpush_url:
+    type: array
+    description: Parameter actions.btn1_shortpush_url
+    api: settings/actions
+    parameter_path: actions.btn1_shortpush_url
+    read_only: true
+  actions_btn1_shortpush_url[0]_index:
+    type: integer
+    description: Parameter actions.btn1_shortpush_url[0].index
+    api: settings/actions
+    parameter_path: actions.btn1_shortpush_url[0].index
+    read_only: false
+  actions_btn1_shortpush_url[0]_urls:
+    type: array
+    description: Parameter actions.btn1_shortpush_url[0].urls
+    api: settings/actions
+    parameter_path: actions.btn1_shortpush_url[0].urls
+    read_only: true
+  actions_btn1_shortpush_url[0]_enabled:
+    type: boolean
+    description: Parameter actions.btn1_shortpush_url[0].enabled
+    api: settings/actions
+    parameter_path: actions.btn1_shortpush_url[0].enabled
+    read_only: false
+  actions_btn2_on_url:
+    type: array
+    description: Parameter actions.btn2_on_url
+    api: settings/actions
+    parameter_path: actions.btn2_on_url
+    read_only: true
+  actions_btn2_on_url[0]_index:
+    type: integer
+    description: Parameter actions.btn2_on_url[0].index
+    api: settings/actions
+    parameter_path: actions.btn2_on_url[0].index
+    read_only: false
+  actions_btn2_on_url[0]_urls:
+    type: array
+    description: Parameter actions.btn2_on_url[0].urls
+    api: settings/actions
+    parameter_path: actions.btn2_on_url[0].urls
+    read_only: true
+  actions_btn2_on_url[0]_enabled:
+    type: boolean
+    description: Parameter actions.btn2_on_url[0].enabled
+    api: settings/actions
+    parameter_path: actions.btn2_on_url[0].enabled
+    read_only: false
+  actions_btn2_off_url:
+    type: array
+    description: Parameter actions.btn2_off_url
+    api: settings/actions
+    parameter_path: actions.btn2_off_url
+    read_only: true
+  actions_btn2_off_url[0]_index:
+    type: integer
+    description: Parameter actions.btn2_off_url[0].index
+    api: settings/actions
+    parameter_path: actions.btn2_off_url[0].index
+    read_only: false
+  actions_btn2_off_url[0]_urls:
+    type: array
+    description: Parameter actions.btn2_off_url[0].urls
+    api: settings/actions
+    parameter_path: actions.btn2_off_url[0].urls
+    read_only: true
+  actions_btn2_off_url[0]_enabled:
+    type: boolean
+    description: Parameter actions.btn2_off_url[0].enabled
+    api: settings/actions
+    parameter_path: actions.btn2_off_url[0].enabled
+    read_only: false
+  actions_btn2_longpush_url:
+    type: array
+    description: Parameter actions.btn2_longpush_url
+    api: settings/actions
+    parameter_path: actions.btn2_longpush_url
+    read_only: true
+  actions_btn2_longpush_url[0]_index:
+    type: integer
+    description: Parameter actions.btn2_longpush_url[0].index
+    api: settings/actions
+    parameter_path: actions.btn2_longpush_url[0].index
+    read_only: false
+  actions_btn2_longpush_url[0]_urls:
+    type: array
+    description: Parameter actions.btn2_longpush_url[0].urls
+    api: settings/actions
+    parameter_path: actions.btn2_longpush_url[0].urls
+    read_only: true
+  actions_btn2_longpush_url[0]_enabled:
+    type: boolean
+    description: Parameter actions.btn2_longpush_url[0].enabled
+    api: settings/actions
+    parameter_path: actions.btn2_longpush_url[0].enabled
+    read_only: false
+  actions_btn2_shortpush_url:
+    type: array
+    description: Parameter actions.btn2_shortpush_url
+    api: settings/actions
+    parameter_path: actions.btn2_shortpush_url
+    read_only: true
+  actions_btn2_shortpush_url[0]_index:
+    type: integer
+    description: Parameter actions.btn2_shortpush_url[0].index
+    api: settings/actions
+    parameter_path: actions.btn2_shortpush_url[0].index
+    read_only: false
+  actions_btn2_shortpush_url[0]_urls:
+    type: array
+    description: Parameter actions.btn2_shortpush_url[0].urls
+    api: settings/actions
+    parameter_path: actions.btn2_shortpush_url[0].urls
+    read_only: true
+  actions_btn2_shortpush_url[0]_enabled:
+    type: boolean
+    description: Parameter actions.btn2_shortpush_url[0].enabled
+    api: settings/actions
+    parameter_path: actions.btn2_shortpush_url[0].enabled
+    read_only: false
+  actions_out_on_url:
+    type: array
+    description: Parameter actions.out_on_url
+    api: settings/actions
+    parameter_path: actions.out_on_url
+    read_only: true
+  actions_out_on_url[0]_index:
+    type: integer
+    description: Parameter actions.out_on_url[0].index
+    api: settings/actions
+    parameter_path: actions.out_on_url[0].index
+    read_only: false
+  actions_out_on_url[0]_urls:
+    type: array
+    description: Parameter actions.out_on_url[0].urls
+    api: settings/actions
+    parameter_path: actions.out_on_url[0].urls
+    read_only: true
+  actions_out_on_url[0]_enabled:
+    type: boolean
+    description: Parameter actions.out_on_url[0].enabled
+    api: settings/actions
+    parameter_path: actions.out_on_url[0].enabled
+    read_only: false
+  actions_out_off_url:
+    type: array
+    description: Parameter actions.out_off_url
+    api: settings/actions
+    parameter_path: actions.out_off_url
+    read_only: true
+  actions_out_off_url[0]_index:
+    type: integer
+    description: Parameter actions.out_off_url[0].index
+    api: settings/actions
+    parameter_path: actions.out_off_url[0].index
+    read_only: false
+  actions_out_off_url[0]_urls:
+    type: array
+    description: Parameter actions.out_off_url[0].urls
+    api: settings/actions
+    parameter_path: actions.out_off_url[0].urls
+    read_only: true
+  actions_out_off_url[0]_enabled:
+    type: boolean
+    description: Parameter actions.out_off_url[0].enabled
+    api: settings/actions
+    parameter_path: actions.out_off_url[0].enabled
+    read_only: false
+  enabled:
+    type: boolean
+    description: Parameter enabled
+    api: settings/ap
+    parameter_path: enabled
+    read_only: false
+  ssid:
+    type: string
+    description: Parameter ssid
+    api: settings/ap
+    parameter_path: ssid
+    read_only: true
+  key:
+    type: string
+    description: Parameter key
+    api: settings/ap
+    parameter_path: key
+    read_only: false
+  unprotected:
+    type: boolean
+    description: Parameter unprotected
+    api: settings/login
+    parameter_path: unprotected
+    read_only: false
+  username:
+    type: string
+    description: Parameter username
+    api: settings/login
+    parameter_path: username
+    read_only: false
 type_mappings:
 - SHDM-2

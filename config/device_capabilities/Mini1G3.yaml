@@ -41,6 +41,7 @@ apis:
         webhook_rev: integer
         available_updates:
           beta: '...'
+          stable: '...'
         reset_reason: integer
       wifi:
         sta_ip: string
@@ -169,7 +170,38 @@ apis:
       available_updates:
         beta:
           version: '...'
+        stable:
+          version: '...'
       reset_reason: integer
+  Sys.GetConfig:
+    description: 'Gen2/Gen3 RPC method: Sys.GetConfig'
+    response_structure:
+      device:
+        name: string
+        mac: string
+        fw_id: string
+        discoverable: boolean
+        eco_mode: boolean
+      location:
+        tz: string
+        lat: float
+        lon: float
+      debug:
+        level: integer
+        file_level: 'null'
+        mqtt:
+          enable: '...'
+        websocket:
+          enable: '...'
+        udp:
+          addr: '...'
+      ui_data: {}
+      rpc_udp:
+        dst_addr: 'null'
+        listen_port: 'null'
+      sntp:
+        server: string
+      cfg_rev: integer
   Cloud.GetStatus:
     description: 'Gen2/Gen3 RPC method: Cloud.GetStatus'
     response_structure:
@@ -223,17 +255,913 @@ apis:
       roam:
         rssi_thr: integer
         interval: integer
+  BLE.GetConfig:
+    description: 'Gen2/Gen3 RPC method: BLE.GetConfig'
+    response_structure:
+      enable: boolean
+      rpc:
+        enable: boolean
+      observer:
+        enable: boolean
+  Script.List:
+    description: 'Gen2/Gen3 RPC method: Script.List'
+    response_structure:
+      scripts: []
+  Schedule.List:
+    description: 'Gen2/Gen3 RPC method: Schedule.List'
+    response_structure:
+      jobs: []
+      rev: integer
 parameters:
-  mqtt_enable:
+  shelly_ble_enable:
     type: boolean
-    description: Enable MQTT
-    api: MQTT.SetConfig
-    parameter_path: enable
-  mqtt_server:
+    description: Shelly ble.enable
+    api: Shelly.SetConfig
+    parameter_path: ble.enable
+    component: shelly
+    read_only: false
+  shelly_ble_rpc_enable:
+    type: boolean
+    description: Shelly ble.rpc.enable
+    api: Shelly.SetConfig
+    parameter_path: ble.rpc.enable
+    component: shelly
+    read_only: false
+  shelly_ble_observer_enable:
+    type: boolean
+    description: Shelly ble.observer.enable
+    api: Shelly.SetConfig
+    parameter_path: ble.observer.enable
+    component: shelly
+    read_only: false
+  shelly_cloud_enable:
+    type: boolean
+    description: Shelly cloud.enable
+    api: Shelly.SetConfig
+    parameter_path: cloud.enable
+    component: shelly
+    read_only: false
+  shelly_cloud_server:
     type: string
-    description: MQTT server address
-    api: MQTT.SetConfig
+    description: Shelly cloud.server
+    api: Shelly.SetConfig
+    parameter_path: cloud.server
+    component: shelly
+    read_only: false
+  shelly_input:0_id:
+    type: integer
+    description: Shelly input:0.id
+    api: Shelly.SetConfig
+    parameter_path: input:0.id
+    component: shelly
+    read_only: false
+  shelly_input:0_name:
+    type: string
+    description: Shelly input:0.name
+    api: Shelly.SetConfig
+    parameter_path: input:0.name
+    component: shelly
+    read_only: false
+  shelly_input:0_type:
+    type: string
+    description: Shelly input:0.type
+    api: Shelly.SetConfig
+    parameter_path: input:0.type
+    component: shelly
+    read_only: false
+  shelly_input:0_enable:
+    type: boolean
+    description: Shelly input:0.enable
+    api: Shelly.SetConfig
+    parameter_path: input:0.enable
+    component: shelly
+    read_only: false
+  shelly_input:0_invert:
+    type: boolean
+    description: Shelly input:0.invert
+    api: Shelly.SetConfig
+    parameter_path: input:0.invert
+    component: shelly
+    read_only: false
+  shelly_input:0_factory_reset:
+    type: boolean
+    description: Shelly input:0.factory_reset
+    api: Shelly.SetConfig
+    parameter_path: input:0.factory_reset
+    component: shelly
+    read_only: false
+  shelly_knx_enable:
+    type: boolean
+    description: Shelly knx.enable
+    api: Shelly.SetConfig
+    parameter_path: knx.enable
+    component: shelly
+    read_only: false
+  shelly_knx_ia:
+    type: string
+    description: Shelly knx.ia
+    api: Shelly.SetConfig
+    parameter_path: knx.ia
+    component: shelly
+    read_only: false
+  shelly_knx_routing_addr:
+    type: string
+    description: Shelly knx.routing.addr
+    api: Shelly.SetConfig
+    parameter_path: knx.routing.addr
+    component: shelly
+    read_only: false
+  shelly_mqtt_enable:
+    type: boolean
+    description: Shelly mqtt.enable
+    api: Shelly.SetConfig
+    parameter_path: mqtt.enable
+    component: shelly
+    read_only: false
+  shelly_mqtt_server:
+    type: 'null'
+    description: Shelly mqtt.server
+    api: Shelly.SetConfig
+    parameter_path: mqtt.server
+    component: shelly
+    read_only: false
+  shelly_mqtt_client_id:
+    type: string
+    description: Shelly mqtt.client_id
+    api: Shelly.SetConfig
+    parameter_path: mqtt.client_id
+    component: shelly
+    read_only: false
+  shelly_mqtt_user:
+    type: 'null'
+    description: Shelly mqtt.user
+    api: Shelly.SetConfig
+    parameter_path: mqtt.user
+    component: shelly
+    read_only: false
+  shelly_mqtt_ssl_ca:
+    type: 'null'
+    description: Shelly mqtt.ssl_ca
+    api: Shelly.SetConfig
+    parameter_path: mqtt.ssl_ca
+    component: shelly
+    read_only: false
+  shelly_mqtt_topic_prefix:
+    type: string
+    description: Shelly mqtt.topic_prefix
+    api: Shelly.SetConfig
+    parameter_path: mqtt.topic_prefix
+    component: shelly
+    read_only: false
+  shelly_mqtt_rpc_ntf:
+    type: boolean
+    description: Shelly mqtt.rpc_ntf
+    api: Shelly.SetConfig
+    parameter_path: mqtt.rpc_ntf
+    component: shelly
+    read_only: false
+  shelly_mqtt_status_ntf:
+    type: boolean
+    description: Shelly mqtt.status_ntf
+    api: Shelly.SetConfig
+    parameter_path: mqtt.status_ntf
+    component: shelly
+    read_only: false
+  shelly_mqtt_use_client_cert:
+    type: boolean
+    description: Shelly mqtt.use_client_cert
+    api: Shelly.SetConfig
+    parameter_path: mqtt.use_client_cert
+    component: shelly
+    read_only: false
+  shelly_mqtt_enable_rpc:
+    type: boolean
+    description: Shelly mqtt.enable_rpc
+    api: Shelly.SetConfig
+    parameter_path: mqtt.enable_rpc
+    component: shelly
+    read_only: false
+  shelly_mqtt_enable_control:
+    type: boolean
+    description: Shelly mqtt.enable_control
+    api: Shelly.SetConfig
+    parameter_path: mqtt.enable_control
+    component: shelly
+    read_only: false
+  shelly_switch:0_id:
+    type: integer
+    description: Shelly switch:0.id
+    api: Shelly.SetConfig
+    parameter_path: switch:0.id
+    component: shelly
+    read_only: false
+  shelly_switch:0_name:
+    type: 'null'
+    description: Shelly switch:0.name
+    api: Shelly.SetConfig
+    parameter_path: switch:0.name
+    component: shelly
+    read_only: false
+  shelly_switch:0_in_mode:
+    type: string
+    description: Shelly switch:0.in_mode
+    api: Shelly.SetConfig
+    parameter_path: switch:0.in_mode
+    component: shelly
+    read_only: false
+  shelly_switch:0_initial_state:
+    type: string
+    description: Shelly switch:0.initial_state
+    api: Shelly.SetConfig
+    parameter_path: switch:0.initial_state
+    component: shelly
+    read_only: false
+  shelly_switch:0_auto_on:
+    type: boolean
+    description: Shelly switch:0.auto_on
+    api: Shelly.SetConfig
+    parameter_path: switch:0.auto_on
+    component: shelly
+    read_only: false
+  shelly_switch:0_auto_on_delay:
+    type: float
+    description: Shelly switch:0.auto_on_delay
+    api: Shelly.SetConfig
+    parameter_path: switch:0.auto_on_delay
+    component: shelly
+    read_only: false
+  shelly_switch:0_auto_off:
+    type: boolean
+    description: Shelly switch:0.auto_off
+    api: Shelly.SetConfig
+    parameter_path: switch:0.auto_off
+    component: shelly
+    read_only: false
+  shelly_switch:0_auto_off_delay:
+    type: float
+    description: Shelly switch:0.auto_off_delay
+    api: Shelly.SetConfig
+    parameter_path: switch:0.auto_off_delay
+    component: shelly
+    read_only: false
+  shelly_sys_device_name:
+    type: string
+    description: Shelly sys.device.name
+    api: Shelly.SetConfig
+    parameter_path: sys.device.name
+    component: shelly
+    read_only: false
+  shelly_sys_device_mac:
+    type: string
+    description: Shelly sys.device.mac
+    api: Shelly.SetConfig
+    parameter_path: sys.device.mac
+    component: shelly
+    read_only: false
+  shelly_sys_device_fw_id:
+    type: string
+    description: Shelly sys.device.fw_id
+    api: Shelly.SetConfig
+    parameter_path: sys.device.fw_id
+    component: shelly
+    read_only: false
+  shelly_sys_device_discoverable:
+    type: boolean
+    description: Shelly sys.device.discoverable
+    api: Shelly.SetConfig
+    parameter_path: sys.device.discoverable
+    component: shelly
+    read_only: false
+  shelly_sys_device_eco_mode:
+    type: boolean
+    description: Shelly sys.device.eco_mode
+    api: Shelly.SetConfig
+    parameter_path: sys.device.eco_mode
+    component: shelly
+    read_only: false
+  shelly_sys_location_tz:
+    type: string
+    description: Shelly sys.location.tz
+    api: Shelly.SetConfig
+    parameter_path: sys.location.tz
+    component: shelly
+    read_only: false
+  shelly_sys_location_lat:
+    type: float
+    description: Shelly sys.location.lat
+    api: Shelly.SetConfig
+    parameter_path: sys.location.lat
+    component: shelly
+    read_only: false
+  shelly_sys_location_lon:
+    type: float
+    description: Shelly sys.location.lon
+    api: Shelly.SetConfig
+    parameter_path: sys.location.lon
+    component: shelly
+    read_only: false
+  shelly_sys_debug_level:
+    type: integer
+    description: Shelly sys.debug.level
+    api: Shelly.SetConfig
+    parameter_path: sys.debug.level
+    component: shelly
+    read_only: false
+  shelly_sys_debug_file_level:
+    type: 'null'
+    description: Shelly sys.debug.file_level
+    api: Shelly.SetConfig
+    parameter_path: sys.debug.file_level
+    component: shelly
+    read_only: false
+  shelly_sys_debug_mqtt_enable:
+    type: boolean
+    description: Shelly sys.debug.mqtt.enable
+    api: Shelly.SetConfig
+    parameter_path: sys.debug.mqtt.enable
+    component: shelly
+    read_only: false
+  shelly_sys_debug_websocket_enable:
+    type: boolean
+    description: Shelly sys.debug.websocket.enable
+    api: Shelly.SetConfig
+    parameter_path: sys.debug.websocket.enable
+    component: shelly
+    read_only: false
+  shelly_sys_debug_udp_addr:
+    type: 'null'
+    description: Shelly sys.debug.udp.addr
+    api: Shelly.SetConfig
+    parameter_path: sys.debug.udp.addr
+    component: shelly
+    read_only: false
+  shelly_sys_rpc_udp_dst_addr:
+    type: 'null'
+    description: Shelly sys.rpc_udp.dst_addr
+    api: Shelly.SetConfig
+    parameter_path: sys.rpc_udp.dst_addr
+    component: shelly
+    read_only: false
+  shelly_sys_rpc_udp_listen_port:
+    type: 'null'
+    description: Shelly sys.rpc_udp.listen_port
+    api: Shelly.SetConfig
+    parameter_path: sys.rpc_udp.listen_port
+    component: shelly
+    read_only: false
+  shelly_sys_sntp_server:
+    type: string
+    description: Shelly sys.sntp.server
+    api: Shelly.SetConfig
+    parameter_path: sys.sntp.server
+    component: shelly
+    read_only: false
+  shelly_sys_cfg_rev:
+    type: integer
+    description: Shelly sys.cfg_rev
+    api: Shelly.SetConfig
+    parameter_path: sys.cfg_rev
+    component: shelly
+    read_only: false
+  shelly_wifi_ap_ssid:
+    type: string
+    description: Shelly wifi.ap.ssid
+    api: Shelly.SetConfig
+    parameter_path: wifi.ap.ssid
+    component: shelly
+    read_only: false
+  shelly_wifi_ap_is_open:
+    type: boolean
+    description: Shelly wifi.ap.is_open
+    api: Shelly.SetConfig
+    parameter_path: wifi.ap.is_open
+    component: shelly
+    read_only: false
+  shelly_wifi_ap_enable:
+    type: boolean
+    description: Shelly wifi.ap.enable
+    api: Shelly.SetConfig
+    parameter_path: wifi.ap.enable
+    component: shelly
+    read_only: false
+  shelly_wifi_ap_range_extender_enable:
+    type: boolean
+    description: Shelly wifi.ap.range_extender.enable
+    api: Shelly.SetConfig
+    parameter_path: wifi.ap.range_extender.enable
+    component: shelly
+    read_only: false
+  shelly_wifi_sta_ssid:
+    type: string
+    description: Shelly wifi.sta.ssid
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta.ssid
+    component: shelly
+    read_only: false
+  shelly_wifi_sta_is_open:
+    type: boolean
+    description: Shelly wifi.sta.is_open
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta.is_open
+    component: shelly
+    read_only: false
+  shelly_wifi_sta_enable:
+    type: boolean
+    description: Shelly wifi.sta.enable
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta.enable
+    component: shelly
+    read_only: false
+  shelly_wifi_sta_ipv4mode:
+    type: string
+    description: Shelly wifi.sta.ipv4mode
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta.ipv4mode
+    component: shelly
+    read_only: false
+  shelly_wifi_sta_ip:
+    type: 'null'
+    description: Shelly wifi.sta.ip
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta.ip
+    component: shelly
+    read_only: false
+  shelly_wifi_sta_netmask:
+    type: 'null'
+    description: Shelly wifi.sta.netmask
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta.netmask
+    component: shelly
+    read_only: false
+  shelly_wifi_sta_gw:
+    type: 'null'
+    description: Shelly wifi.sta.gw
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta.gw
+    component: shelly
+    read_only: false
+  shelly_wifi_sta_nameserver:
+    type: 'null'
+    description: Shelly wifi.sta.nameserver
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta.nameserver
+    component: shelly
+    read_only: false
+  shelly_wifi_sta1_ssid:
+    type: 'null'
+    description: Shelly wifi.sta1.ssid
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta1.ssid
+    component: shelly
+    read_only: false
+  shelly_wifi_sta1_is_open:
+    type: boolean
+    description: Shelly wifi.sta1.is_open
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta1.is_open
+    component: shelly
+    read_only: false
+  shelly_wifi_sta1_enable:
+    type: boolean
+    description: Shelly wifi.sta1.enable
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta1.enable
+    component: shelly
+    read_only: false
+  shelly_wifi_sta1_ipv4mode:
+    type: string
+    description: Shelly wifi.sta1.ipv4mode
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta1.ipv4mode
+    component: shelly
+    read_only: false
+  shelly_wifi_sta1_ip:
+    type: 'null'
+    description: Shelly wifi.sta1.ip
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta1.ip
+    component: shelly
+    read_only: false
+  shelly_wifi_sta1_netmask:
+    type: 'null'
+    description: Shelly wifi.sta1.netmask
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta1.netmask
+    component: shelly
+    read_only: false
+  shelly_wifi_sta1_gw:
+    type: 'null'
+    description: Shelly wifi.sta1.gw
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta1.gw
+    component: shelly
+    read_only: false
+  shelly_wifi_sta1_nameserver:
+    type: 'null'
+    description: Shelly wifi.sta1.nameserver
+    api: Shelly.SetConfig
+    parameter_path: wifi.sta1.nameserver
+    component: shelly
+    read_only: false
+  shelly_wifi_roam_rssi_thr:
+    type: integer
+    description: Shelly wifi.roam.rssi_thr
+    api: Shelly.SetConfig
+    parameter_path: wifi.roam.rssi_thr
+    component: shelly
+    read_only: false
+  shelly_wifi_roam_interval:
+    type: integer
+    description: Shelly wifi.roam.interval
+    api: Shelly.SetConfig
+    parameter_path: wifi.roam.interval
+    component: shelly
+    read_only: false
+  shelly_ws_enable:
+    type: boolean
+    description: Shelly ws.enable
+    api: Shelly.SetConfig
+    parameter_path: ws.enable
+    component: shelly
+    read_only: false
+  shelly_ws_server:
+    type: string
+    description: Shelly ws.server
+    api: Shelly.SetConfig
+    parameter_path: ws.server
+    component: shelly
+    read_only: false
+  shelly_ws_ssl_ca:
+    type: string
+    description: Shelly ws.ssl_ca
+    api: Shelly.SetConfig
+    parameter_path: ws.ssl_ca
+    component: shelly
+    read_only: false
+  sys_device_name:
+    type: string
+    description: Sys device.name
+    api: Sys.SetConfig
+    parameter_path: device.name
+    component: sys
+    read_only: false
+  sys_device_mac:
+    type: string
+    description: Sys device.mac
+    api: Sys.SetConfig
+    parameter_path: device.mac
+    component: sys
+    read_only: false
+  sys_device_fw_id:
+    type: string
+    description: Sys device.fw_id
+    api: Sys.SetConfig
+    parameter_path: device.fw_id
+    component: sys
+    read_only: false
+  sys_device_discoverable:
+    type: boolean
+    description: Sys device.discoverable
+    api: Sys.SetConfig
+    parameter_path: device.discoverable
+    component: sys
+    read_only: false
+  sys_device_eco_mode:
+    type: boolean
+    description: Sys device.eco_mode
+    api: Sys.SetConfig
+    parameter_path: device.eco_mode
+    component: sys
+    read_only: false
+  sys_location_tz:
+    type: string
+    description: Sys location.tz
+    api: Sys.SetConfig
+    parameter_path: location.tz
+    component: sys
+    read_only: false
+  sys_location_lat:
+    type: float
+    description: Sys location.lat
+    api: Sys.SetConfig
+    parameter_path: location.lat
+    component: sys
+    read_only: false
+  sys_location_lon:
+    type: float
+    description: Sys location.lon
+    api: Sys.SetConfig
+    parameter_path: location.lon
+    component: sys
+    read_only: false
+  sys_debug_level:
+    type: integer
+    description: Sys debug.level
+    api: Sys.SetConfig
+    parameter_path: debug.level
+    component: sys
+    read_only: false
+  sys_debug_file_level:
+    type: 'null'
+    description: Sys debug.file_level
+    api: Sys.SetConfig
+    parameter_path: debug.file_level
+    component: sys
+    read_only: false
+  sys_debug_mqtt_enable:
+    type: boolean
+    description: Sys debug.mqtt.enable
+    api: Sys.SetConfig
+    parameter_path: debug.mqtt.enable
+    component: sys
+    read_only: false
+  sys_debug_websocket_enable:
+    type: boolean
+    description: Sys debug.websocket.enable
+    api: Sys.SetConfig
+    parameter_path: debug.websocket.enable
+    component: sys
+    read_only: false
+  sys_debug_udp_addr:
+    type: 'null'
+    description: Sys debug.udp.addr
+    api: Sys.SetConfig
+    parameter_path: debug.udp.addr
+    component: sys
+    read_only: false
+  sys_rpc_udp_dst_addr:
+    type: 'null'
+    description: Sys rpc_udp.dst_addr
+    api: Sys.SetConfig
+    parameter_path: rpc_udp.dst_addr
+    component: sys
+    read_only: false
+  sys_rpc_udp_listen_port:
+    type: 'null'
+    description: Sys rpc_udp.listen_port
+    api: Sys.SetConfig
+    parameter_path: rpc_udp.listen_port
+    component: sys
+    read_only: false
+  sys_sntp_server:
+    type: string
+    description: Sys sntp.server
+    api: Sys.SetConfig
+    parameter_path: sntp.server
+    component: sys
+    read_only: false
+  cfg_rev:
+    type: integer
+    description: Sys cfg_rev
+    api: Sys.SetConfig
+    parameter_path: cfg_rev
+    component: sys
+    read_only: false
+  enable:
+    type: boolean
+    description: Cloud enable
+    api: Cloud.SetConfig
+    parameter_path: enable
+    component: cloud
+    read_only: false
+  server:
+    type: string
+    description: Cloud server
+    api: Cloud.SetConfig
     parameter_path: server
+    component: cloud
+    read_only: false
+  client_id:
+    type: string
+    description: Mqtt client_id
+    api: MQTT.SetConfig
+    parameter_path: client_id
+    component: mqtt
+    read_only: false
+  user:
+    type: 'null'
+    description: Mqtt user
+    api: MQTT.SetConfig
+    parameter_path: user
+    component: mqtt
+    read_only: false
+  ssl_ca:
+    type: 'null'
+    description: Mqtt ssl_ca
+    api: MQTT.SetConfig
+    parameter_path: ssl_ca
+    component: mqtt
+    read_only: false
+  topic_prefix:
+    type: string
+    description: Mqtt topic_prefix
+    api: MQTT.SetConfig
+    parameter_path: topic_prefix
+    component: mqtt
+    read_only: false
+  rpc_ntf:
+    type: boolean
+    description: Mqtt rpc_ntf
+    api: MQTT.SetConfig
+    parameter_path: rpc_ntf
+    component: mqtt
+    read_only: false
+  status_ntf:
+    type: boolean
+    description: Mqtt status_ntf
+    api: MQTT.SetConfig
+    parameter_path: status_ntf
+    component: mqtt
+    read_only: false
+  use_client_cert:
+    type: boolean
+    description: Mqtt use_client_cert
+    api: MQTT.SetConfig
+    parameter_path: use_client_cert
+    component: mqtt
+    read_only: false
+  enable_rpc:
+    type: boolean
+    description: Mqtt enable_rpc
+    api: MQTT.SetConfig
+    parameter_path: enable_rpc
+    component: mqtt
+    read_only: false
+  enable_control:
+    type: boolean
+    description: Mqtt enable_control
+    api: MQTT.SetConfig
+    parameter_path: enable_control
+    component: mqtt
+    read_only: false
+  wifi_ap_ssid:
+    type: string
+    description: Wifi ap.ssid
+    api: WiFi.SetConfig
+    parameter_path: ap.ssid
+    component: wifi
+    read_only: false
+  wifi_ap_is_open:
+    type: boolean
+    description: Wifi ap.is_open
+    api: WiFi.SetConfig
+    parameter_path: ap.is_open
+    component: wifi
+    read_only: false
+  wifi_ap_enable:
+    type: boolean
+    description: Wifi ap.enable
+    api: WiFi.SetConfig
+    parameter_path: ap.enable
+    component: wifi
+    read_only: false
+  wifi_ap_range_extender_enable:
+    type: boolean
+    description: Wifi ap.range_extender.enable
+    api: WiFi.SetConfig
+    parameter_path: ap.range_extender.enable
+    component: wifi
+    read_only: false
+  wifi_sta_ssid:
+    type: string
+    description: Wifi sta.ssid
+    api: WiFi.SetConfig
+    parameter_path: sta.ssid
+    component: wifi
+    read_only: false
+  wifi_sta_is_open:
+    type: boolean
+    description: Wifi sta.is_open
+    api: WiFi.SetConfig
+    parameter_path: sta.is_open
+    component: wifi
+    read_only: false
+  wifi_sta_enable:
+    type: boolean
+    description: Wifi sta.enable
+    api: WiFi.SetConfig
+    parameter_path: sta.enable
+    component: wifi
+    read_only: false
+  wifi_sta_ipv4mode:
+    type: string
+    description: Wifi sta.ipv4mode
+    api: WiFi.SetConfig
+    parameter_path: sta.ipv4mode
+    component: wifi
+    read_only: false
+  wifi_sta_ip:
+    type: 'null'
+    description: Wifi sta.ip
+    api: WiFi.SetConfig
+    parameter_path: sta.ip
+    component: wifi
+    read_only: false
+  wifi_sta_netmask:
+    type: 'null'
+    description: Wifi sta.netmask
+    api: WiFi.SetConfig
+    parameter_path: sta.netmask
+    component: wifi
+    read_only: false
+  wifi_sta_gw:
+    type: 'null'
+    description: Wifi sta.gw
+    api: WiFi.SetConfig
+    parameter_path: sta.gw
+    component: wifi
+    read_only: false
+  wifi_sta_nameserver:
+    type: 'null'
+    description: Wifi sta.nameserver
+    api: WiFi.SetConfig
+    parameter_path: sta.nameserver
+    component: wifi
+    read_only: false
+  wifi_sta1_ssid:
+    type: 'null'
+    description: Wifi sta1.ssid
+    api: WiFi.SetConfig
+    parameter_path: sta1.ssid
+    component: wifi
+    read_only: false
+  wifi_sta1_is_open:
+    type: boolean
+    description: Wifi sta1.is_open
+    api: WiFi.SetConfig
+    parameter_path: sta1.is_open
+    component: wifi
+    read_only: false
+  wifi_sta1_enable:
+    type: boolean
+    description: Wifi sta1.enable
+    api: WiFi.SetConfig
+    parameter_path: sta1.enable
+    component: wifi
+    read_only: false
+  wifi_sta1_ipv4mode:
+    type: string
+    description: Wifi sta1.ipv4mode
+    api: WiFi.SetConfig
+    parameter_path: sta1.ipv4mode
+    component: wifi
+    read_only: false
+  wifi_sta1_ip:
+    type: 'null'
+    description: Wifi sta1.ip
+    api: WiFi.SetConfig
+    parameter_path: sta1.ip
+    component: wifi
+    read_only: false
+  wifi_sta1_netmask:
+    type: 'null'
+    description: Wifi sta1.netmask
+    api: WiFi.SetConfig
+    parameter_path: sta1.netmask
+    component: wifi
+    read_only: false
+  wifi_sta1_gw:
+    type: 'null'
+    description: Wifi sta1.gw
+    api: WiFi.SetConfig
+    parameter_path: sta1.gw
+    component: wifi
+    read_only: false
+  wifi_sta1_nameserver:
+    type: 'null'
+    description: Wifi sta1.nameserver
+    api: WiFi.SetConfig
+    parameter_path: sta1.nameserver
+    component: wifi
+    read_only: false
+  wifi_roam_rssi_thr:
+    type: integer
+    description: Wifi roam.rssi_thr
+    api: WiFi.SetConfig
+    parameter_path: roam.rssi_thr
+    component: wifi
+    read_only: false
+  wifi_roam_interval:
+    type: integer
+    description: Wifi roam.interval
+    api: WiFi.SetConfig
+    parameter_path: roam.interval
+    component: wifi
+    read_only: false
+  ble_rpc_enable:
+    type: boolean
+    description: Ble rpc.enable
+    api: BLE.SetConfig
+    parameter_path: rpc.enable
+    component: ble
+    read_only: false
+  ble_observer_enable:
+    type: boolean
+    description: Ble observer.enable
+    api: BLE.SetConfig
+    parameter_path: observer.enable
+    component: ble
+    read_only: false
   eco_mode:
     type: boolean
     description: Energy saving mode

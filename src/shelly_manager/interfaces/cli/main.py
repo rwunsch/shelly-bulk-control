@@ -25,6 +25,11 @@ from .commands import capabilities
 # Create Typer app
 app = typer.Typer()
 
+# Add sub-apps
+app.add_typer(groups_app, name="groups", help="Manage device groups")
+app.add_typer(parameters_app, name="parameters", help="Manage device parameters dynamically")
+app.add_typer(capabilities.app, name="capabilities", help="Manage device capabilities and features")
+
 # Create console for rich output
 console = Console()
 
@@ -263,15 +268,6 @@ def set_settings(device_id: str, setting: list[str], debug: bool = typer.Option(
         console.print("Settings updated successfully", style="green")
     else:
         console.print("Failed to update settings", style="red")
-
-# Add the groups command
-app.add_typer(groups_app, name="groups", help="Manage device groups")
-
-# Add the parameter management commands
-app.add_typer(parameters_app, name="parameters", help="Manage device parameters")
-
-# Add the capabilities command to the app
-app.add_typer(capabilities.app, name="capabilities", help="Manage device capabilities and features")
 
 if __name__ == "__main__":
     app() 

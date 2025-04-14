@@ -128,13 +128,19 @@ def discover_capabilities(
     device_id: Optional[str] = typer.Option(None, "--id", help="ID of device to discover"),
     force: bool = typer.Option(False, "--force", "-f", help="Force rediscovery even if capability exists"),
     scan: bool = typer.Option(False, "--scan", help="Scan network for devices and discover capabilities for all"),
-    network: str = typer.Option("192.168.1.0/24", "--network", help="Network CIDR to scan (default: 192.168.1.0/24)")
+    network: str = typer.Option("192.168.1.0/24", "--network", help="Network CIDR to scan (default: 192.168.1.0/24)"),
+    debug: bool = typer.Option(False, "--debug", "-d", help="Enable debug logging")
 ):
     """
     Discover capabilities from a device and generate a capability definition.
     
     Either --ip, --id, or --scan must be specified.
     """
+    # Configure logging for debug mode
+    if debug:
+        logging.getLogger().setLevel(logging.DEBUG)
+        console.print("[yellow]Debug mode enabled[/yellow]")
+    
     if not ip and not device_id and not scan:
         console.print("[red]Error: Either --ip, --id, or --scan must be specified[/red]")
         return
@@ -230,21 +236,33 @@ def discover_capabilities(
         console.print(f"Discovering device at {ip}...")
         
         try:
-            # Start the discovery service
-            asyncio.run(discovery_service.start())
-            
-            device = asyncio.run(discovery_service._probe_device(ip))
-            if not device:
-                console.print(f"[red]Error: No Shelly device found at {ip}[/red]")
-                asyncio.run(discovery_service.stop())
-                return
+            console.print(f"[cyan]Probing IP {ip} for device...[/cyan]")
+            # Start discovery service
+            discovery_service = DiscoveryService()
+            try:
+                device = asyncio.run(discovery_service._probe_device(ip))
+                if not device:
+                    console.print(f"[red]Error: No Shelly device found at {ip}[/red]")
+                    return
+                
+                # Discover capabilities for the device
+                console.print(f"[cyan]Discovering capabilities for device at {ip}...[/cyan]")
+                success = asyncio.run(discovery_service.discover_device_capabilities(device))
+                if success:
+                    console.print(f"[green]Successfully discovered capabilities for {device.name} ({device.id})[/green]")
+                else:
+                    console.print(f"[red]Failed to discover capabilities for device at {ip}[/red]")
+            finally:
+                # Make sure we stop the discovery service
+                try:
+                    asyncio.run(discovery_service.stop())
+                except RuntimeError:
+                    # Ignore runtime errors about closed event loops
+                    pass
         except Exception as e:
             console.print(f"[red]Error discovering device: {e}[/red]")
-            asyncio.run(discovery_service.stop())
             return
         
-        asyncio.run(discovery_service.stop())
-    
     if not device:
         console.print("[red]Error: No device found to discover capabilities for[/red]")
         return

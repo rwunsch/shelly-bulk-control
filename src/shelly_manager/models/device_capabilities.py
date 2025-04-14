@@ -139,6 +139,25 @@ class DeviceCapability:
         if param_details:
             return param_details.get("api")
         return None
+        
+    def get_writable_parameters(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get all writable parameters for this device.
+        
+        Returns:
+            Dictionary of writable parameters and their details
+        """
+        return {name: details for name, details in self.parameters.items() 
+                if not details.get("read_only", True)}
+    
+    def get_readable_parameters(self) -> Dict[str, Dict[str, Any]]:
+        """
+        Get all readable parameters for this device.
+        
+        Returns:
+            Dictionary of readable parameters and their details
+        """
+        return self.parameters
 
     def to_dict(self) -> Dict[str, Any]:
         """
@@ -473,20 +492,18 @@ class CapabilityDiscovery:
         apis = capability.data["apis"]
         parameters = capability.data["parameters"]
         
-        # Try common Gen1 endpoints
+        # Expanded list of Gen1 endpoints to probe
         endpoints = [
-            "/settings",
-            "/status",
-            "/shelly",
-            "/settings/actions",
-            "/settings/ap",
-            "/settings/light",
-            "/settings/login",
-            "/settings/mqtt",
-            "/settings/network",
-            "/settings/relay/0",
-            "/settings/cloud",
-            "/settings/device"
+            "/settings", "/status", "/shelly",
+            # Add more core endpoints
+            "/settings/actions", "/settings/ap", "/settings/light",
+            "/settings/login", "/settings/mqtt", "/settings/network",
+            # Add relay endpoints dynamically based on device outputs
+            *[f"/settings/relay/{i}" for i in range(getattr(device, 'num_outputs', 1) or 1)],
+            # Add meter endpoints
+            *[f"/status/meters/{i}" for i in range(getattr(device, 'num_meters', 0) or 0)],
+            # Add other potential endpoints
+            "/settings/cloud", "/settings/device", "/settings/webhooks"
         ]
         
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.http_timeout)) as session:
@@ -505,11 +522,155 @@ class CapabilityDiscovery:
                                 "response_structure": self._parse_structure(data)
                             }
                             
-                            # Extract parameters from settings
-                            if endpoint == "/settings":
-                                self._extract_gen1_parameters(data, parameters)
+                            # Extract ALL parameters from response
+                            self._extract_all_gen1_parameters(data, parameters, api_name)
                 except Exception as e:
                     logger.debug(f"Error probing Gen1 endpoint {endpoint} for {device.id}: {e}")
+    
+    def _extract_all_gen1_parameters(self, data: Dict[str, Any], parameters: Dict[str, Any], api_name: str) -> None:
+        """
+        Extract all parameters recursively from a Gen1 JSON response.
+        
+        Args:
+            data: JSON response data
+            parameters: Parameters dictionary to update
+            api_name: API endpoint name
+        """
+        self._extract_parameters_recursive(data, parameters, api_name, "", [])
+    
+    def _extract_parameters_recursive(self, data: Dict[str, Any], parameters: Dict[str, Any], 
+                                     api_name: str, path_prefix: str, path_parts: List[str]) -> None:
+        """
+        Recursively extract parameters from nested JSON data.
+        
+        Args:
+            data: JSON data to extract parameters from
+            parameters: Parameters dictionary to update
+            api_name: API endpoint name
+            path_prefix: Current path prefix for parameter paths
+            path_parts: Current path parts list
+        """
+        if not isinstance(data, dict):
+            return
+            
+        for key, value in data.items():
+            current_path = path_prefix + ("." if path_prefix else "") + key
+            current_parts = path_parts + [key]
+            
+            # Skip only internal fields that start with underscores
+            # Don't skip wifi_sta and other fields as they may contain important parameters
+            if key.startswith("_"):
+                continue
+                
+            # Determine parameter type
+            param_type = self._infer_parameter_type(value)
+            
+            # For any value (not just non-objects), register as potential parameter
+            # Create parameter entry if it doesn't exist
+            param_name = current_path.replace(".", "_")  # Use underscores for dots in parameter names
+            
+            # Check if parameter already exists
+            if param_name not in parameters:
+                # Determine if this parameter is likely writable
+                is_read_only = self._is_likely_read_only(current_parts, param_type)
+                
+                # For settings APIs, many parameters are writable unless explicitly marked as read-only
+                if "settings" in api_name and not is_read_only:
+                    is_read_only = False
+                
+                parameters[param_name] = {
+                    "type": param_type,
+                    "description": f"Parameter {current_path}",
+                    "api": api_name,
+                    "parameter_path": current_path,
+                    "read_only": is_read_only
+                }
+            
+            # For objects, recurse to extract nested parameters
+            if isinstance(value, dict):
+                self._extract_parameters_recursive(value, parameters, api_name, current_path, current_parts)
+            # For arrays, only extract if they contain objects
+            elif isinstance(value, list) and value and isinstance(value[0], dict):
+                # For the first item in the array as an example
+                self._extract_parameters_recursive(value[0], parameters, api_name, current_path + "[0]", current_parts + ["[0]"])
+    
+    def _infer_parameter_type(self, value: Any) -> str:
+        """
+        Infer parameter type from value.
+        
+        Args:
+            value: Value to infer type from
+            
+        Returns:
+            String representing the parameter type
+        """
+        if value is None:
+            return "null"
+        elif isinstance(value, bool):
+            return "boolean"
+        elif isinstance(value, int):
+            return "integer"
+        elif isinstance(value, float):
+            return "float"
+        elif isinstance(value, str):
+            return "string"
+        elif isinstance(value, list):
+            return "array"
+        elif isinstance(value, dict):
+            return "object"
+        else:
+            return "string"  # Default to string for unknown types
+    
+    def _is_likely_read_only(self, path_parts: List[str], param_type: str) -> bool:
+        """
+        Determine if a parameter is likely read-only based on its path and type.
+        This is a heuristic approach that will be refined with actual testing.
+        
+        Args:
+            path_parts: Parameter path parts
+            param_type: Parameter type
+            
+        Returns:
+            True if parameter is likely read-only, False otherwise
+        """
+        # Status endpoints are typically read-only data reporting
+        if "status" in path_parts:
+            return True
+            
+        # More precise read-only indicators - these are typically status/reporting values
+        read_only_indicators = [
+            "uptime", "timestamp", "ram", "fs", "has_update", 
+            "current", "voltage", "power", "temperature", "humidity", 
+            "energy", "total", "id", "mac", "serial", "fw_version",
+            "time", "unixtime", "temperature", "overtemperature", "ttot"
+        ]
+        
+        # Check if any path part contains a read-only indicator
+        if any(any(indicator in part.lower() for indicator in read_only_indicators) for part in path_parts):
+            return True
+            
+        # Some parameters in config/settings are never writable
+        never_writable_settings = [
+            "fw", "cloud_enabled", "discovering", "debug_enable", "device_type",
+            "build_id", "factory_reset", "uptime", "ram_free", "ram_total", 
+            "ram_size", "fs_free", "fs_size", "available_updates"
+        ]
+        
+        if any(part in never_writable_settings for part in path_parts):
+            return True
+            
+        # Arrays are typically for status reporting, but we can inspect their content if needed
+        if param_type == "array":
+            return True
+            
+        # Objects need more context, but many are writable (e.g., wifi_sta, mqtt config)
+        if param_type == "object":
+            # Only settings objects that aren't in any of our lists might be writable
+            pass
+            
+        # Default to assuming it's writable for parameters in settings endpoints
+        # This allows more parameters to be discovered and tested
+        return False
     
     async def _discover_gen2_capabilities(self, device: Device, capability: DeviceCapability) -> None:
         """
@@ -523,19 +684,20 @@ class CapabilityDiscovery:
         apis = capability.data["apis"]
         parameters = capability.data["parameters"]
         
-        # Common RPC methods to try
+        # Expanded list of Gen2/Gen3 RPC methods to try
         rpc_methods = [
-            "Shelly.GetStatus",
-            "Shelly.GetConfig",
-            "Sys.GetStatus",
-            "Switch.GetStatus",
-            "Switch.GetConfig",
-            "Light.GetStatus",
-            "Light.GetConfig",
-            "Cloud.GetStatus",
-            "Cloud.GetConfig",
-            "MQTT.GetConfig",
-            "WiFi.GetConfig"
+            # Core methods
+            "Shelly.GetStatus", "Shelly.GetConfig",
+            "Sys.GetStatus", "Sys.GetConfig",
+            # Component-specific methods based on device type
+            "Switch.GetStatus", "Switch.GetConfig",
+            "Light.GetStatus", "Light.GetConfig",
+            "Cloud.GetStatus", "Cloud.GetConfig",
+            "MQTT.GetConfig", "WiFi.GetConfig",
+            # Add more methods
+            "Eth.GetConfig", "BLE.GetConfig", "Input.GetStatus", 
+            "Cover.GetStatus", "Cover.GetConfig",
+            "Script.List", "Schedule.List"
         ]
         
         async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.http_timeout)) as session:
@@ -553,14 +715,76 @@ class CapabilityDiscovery:
                                 "response_structure": self._parse_structure(data)
                             }
                             
-                            # Extract parameters from config methods
+                            # Extract all parameters from config methods
                             if "GetConfig" in method:
-                                self._extract_gen2_parameters(method, data, parameters)
+                                component = method.split('.')[0].lower()
+                                self._extract_all_gen2_parameters(method, data, parameters, component)
                 except Exception as e:
                     logger.debug(f"Error calling RPC method {method} for {device.id}: {e}")
             
             # Try to discover eco mode specifically
             await self._check_gen2_eco_mode(device, session, parameters)
+    
+    def _extract_all_gen2_parameters(self, method: str, data: Dict[str, Any], 
+                                   parameters: Dict[str, Any], component: str) -> None:
+        """
+        Extract all parameters from Gen2/Gen3 configuration data.
+        
+        Args:
+            method: RPC method that was called
+            data: JSON response data
+            parameters: Parameters dictionary to update
+            component: Component name (e.g., 'sys', 'mqtt')
+        """
+        # Determine the corresponding SetConfig method
+        set_method = method.replace("Get", "Set")
+        
+        # Extract all parameters recursively
+        self._extract_gen2_parameters_recursive(data, parameters, set_method, "", component)
+    
+    def _extract_gen2_parameters_recursive(self, data: Dict[str, Any], parameters: Dict[str, Any],
+                                        api: str, path_prefix: str, component: str) -> None:
+        """
+        Recursively extract parameters from Gen2/Gen3 configuration data.
+        
+        Args:
+            data: JSON data to extract parameters from
+            parameters: Parameters dictionary to update
+            api: API method name
+            path_prefix: Current path prefix for parameter paths
+            component: Component name
+        """
+        if not isinstance(data, dict):
+            return
+            
+        for key, value in data.items():
+            current_path = path_prefix + ("." if path_prefix else "") + key
+            
+            # Determine parameter type
+            param_type = self._infer_parameter_type(value)
+            
+            # For non-objects, register as parameter
+            if param_type != "object" or not isinstance(value, dict):
+                # Create standardized parameter name
+                if path_prefix:
+                    param_name = f"{component}_{current_path}".replace(".", "_")
+                else:
+                    param_name = f"{key}"
+                
+                # Check if parameter already exists
+                if param_name not in parameters:
+                    parameters[param_name] = {
+                        "type": param_type,
+                        "description": f"{component.capitalize()} {current_path}",
+                        "api": api,
+                        "parameter_path": current_path,
+                        "component": component,
+                        "read_only": False  # Assume Config parameters are writable by default
+                    }
+            
+            # For objects, recurse
+            if isinstance(value, dict):
+                self._extract_gen2_parameters_recursive(value, parameters, api, current_path, component)
     
     async def _check_gen2_eco_mode(self, device: Device, session: aiohttp.ClientSession, 
                                   parameters: Dict[str, Any]) -> None:
@@ -587,144 +811,6 @@ class CapabilityDiscovery:
                         }
         except Exception as e:
             logger.debug(f"Error checking eco mode for {device.id}: {e}")
-    
-    def _extract_gen1_parameters(self, data: Dict[str, Any], parameters: Dict[str, Any]) -> None:
-        """
-        Extract parameters from Gen1 device settings.
-        
-        Args:
-            data: Settings data from the device
-            parameters: Parameters dictionary to update
-        """
-        # Common parameters to look for in Gen1 devices
-        param_mapping = {
-            "name": {
-                "path": "name",
-                "type": "string",
-                "description": "Device name"
-            },
-            "mqtt_enable": {
-                "path": "mqtt.enable", 
-                "type": "boolean",
-                "description": "Enable MQTT"
-            },
-            "mqtt_server": {
-                "path": "mqtt.server",
-                "type": "string",
-                "description": "MQTT server address"
-            },
-            "eco_mode_enabled": {  # Gen1-specific name
-                "path": "eco_mode_enabled",
-                "type": "boolean",
-                "description": "Energy saving mode"
-            },
-            "max_power": {
-                "path": "max_power",
-                "type": "number",
-                "description": "Maximum power in watts"
-            }
-        }
-        
-        # Check for each parameter and add it if found
-        for param_name, param_info in param_mapping.items():
-            path = param_info["path"].split(".")
-            
-            # Navigate to the parameter in the data
-            value = data
-            found = True
-            for key in path:
-                if key in value:
-                    value = value[key]
-                else:
-                    found = False
-                    break
-            
-            if found:
-                # Map Gen1 parameter name to standard (Gen2+) parameter name for compatibility
-                standard_param_name = ParameterMapper.to_standard_parameter(param_name)
-                
-                if standard_param_name != param_name:
-                    logger.debug(f"Mapping Gen1 parameter {param_name} to standard parameter {standard_param_name}")
-                
-                parameters[standard_param_name] = {
-                    "type": param_info["type"],
-                    "description": param_info["description"],
-                    "api": "settings",  # Gen1 devices use /settings endpoint
-                    "parameter_path": param_info["path"]  # Keep the original path for API calls
-                }
-        
-        # Even if we didn't directly find eco_mode_enabled in data, add it as a supported parameter
-        # for ALL Gen1 devices as they generally support this function
-        if "eco_mode" not in parameters and "eco_mode_enabled" not in parameters:
-            logger.debug("Adding eco_mode parameter to Gen1 device (all Gen1 devices support this)")
-            parameters["eco_mode"] = {
-                "type": "boolean",
-                "description": "Energy saving mode",
-                "api": "settings",
-                "parameter_path": "eco_mode_enabled"
-            }
-    
-    def _extract_gen2_parameters(self, method: str, data: Dict[str, Any], 
-                               parameters: Dict[str, Any]) -> None:
-        """
-        Extract parameters from Gen2 device config.
-        
-        Args:
-            method: RPC method that was called
-            data: Config data from the device
-            parameters: Parameters dictionary to update
-        """
-        # Determine the corresponding SetConfig method
-        set_method = method.replace("Get", "Set")
-        
-        # Common parameters in different config endpoints
-        if method == "Shelly.GetConfig":
-            if "name" in data:
-                parameters["name"] = {
-                    "type": "string",
-                    "description": "Device name",
-                    "api": set_method,
-                    "parameter_path": "name"
-                }
-                
-        elif method == "Sys.GetConfig":
-            if "device" in data:
-                device_cfg = data["device"]
-                
-                if "eco_mode" in device_cfg:
-                    parameters["eco_mode"] = {
-                        "type": "boolean",
-                        "description": "Energy saving mode",
-                        "api": set_method,
-                        "parameter_path": "device.eco_mode"
-                    }
-                    
-                if "max_power" in device_cfg:
-                    parameters["max_power"] = {
-                        "type": "number",
-                        "description": "Maximum power in watts",
-                        "api": set_method,
-                        "parameter_path": "device.max_power"
-                    }
-                    
-        elif method == "MQTT.GetConfig":
-            mqtt_cfg = data
-            
-            if "enable" in mqtt_cfg:
-                parameters["mqtt_enable"] = {
-                    "type": "boolean",
-                    "description": "Enable MQTT",
-                    "api": set_method,
-                    "parameter_path": "enable"
-                }
-                
-            if "server" in mqtt_cfg:
-                parameters["mqtt_server"] = {
-                    "type": "string",
-                    "description": "MQTT server address",
-                    "api": set_method,
-                    "parameter_path": "server"
-                }
     
     def _parse_structure(self, data: Any, max_depth: int = 3, current_depth: int = 0) -> Any:
         """

@@ -1,21 +1,26 @@
 version: '3.8'
 
 services:
-  shelly-manager:
+  api:
     build:
       context: ..
       dockerfile: docker/Dockerfile
+    container_name: shelly-manager-api
     ports:
       - "8000:8000"
     volumes:
       - ../config:/app/config
       - ../data:/app/data
+    restart: unless-stopped
     environment:
-      - PYTHONUNBUFFERED=1
-      - LOG_LEVEL=INFO
+      - TZ=UTC
+    command: python -m src.shelly_manager.interfaces.api.server --config=/app/config/api_config.ini
     networks:
       - shelly-network
+      # Add any specific network settings here if needed for device discovery
 
 networks:
   shelly-network:
+    # Use host network mode for device discovery on local network
+    # This ensures the container can discover devices via mDNS and other protocols
     driver: bridge 

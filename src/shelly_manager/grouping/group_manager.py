@@ -184,7 +184,15 @@ class GroupManager:
         for group in self.groups.values():
             self._save_group(group)
     
-    def create_group(
+    async def load_groups(self) -> None:
+        """
+        Asynchronously load all group definitions from YAML files.
+        This is simply a wrapper around the synchronous _load_groups method
+        to support async contexts.
+        """
+        self._load_groups()
+    
+    def _create_group(
         self, 
         name: str, 
         description: Optional[str] = None,
@@ -227,7 +235,43 @@ class GroupManager:
         logger.info(f"Created group '{name}' with {len(group.device_ids)} devices")
         return group
     
-    def update_group(self, group: DeviceGroup) -> None:
+    async def create_group(
+        self, 
+        name: str, 
+        device_ids: Optional[List[str]] = None,
+        description: Optional[str] = None,
+        tags: Optional[List[str]] = None,
+        config: Optional[Dict[str, Any]] = None
+    ) -> DeviceGroup:
+        """
+        Asynchronously create a new device group.
+        This is a wrapper around the synchronous create_group method.
+        
+        Args:
+            name: Name of the group
+            device_ids: List of device IDs to include
+            description: Optional description
+            tags: Optional list of tags
+            config: Optional configuration dictionary
+        
+        Returns:
+            DeviceGroup: The newly created group
+            
+        Raises:
+            ValueError: If a group with this name already exists
+        """
+        return self._create_group(
+            name=name,
+            description=description,
+            device_ids=device_ids,
+            tags=tags,
+            config=config
+        )
+    
+    # Alias for backward compatibility
+    create_group = _create_group
+    
+    def _update_group(self, group: DeviceGroup) -> None:
         """
         Update an existing group.
         
@@ -248,7 +292,44 @@ class GroupManager:
         
         logger.info(f"Updated group '{group.name}'")
     
-    def delete_group(self, group_name: str) -> bool:
+    # Alias for backward compatibility
+    update_group = _update_group
+    
+    async def update_group(
+        self, 
+        group_name: str, 
+        device_ids: List[str],
+        description: Optional[str] = None
+    ) -> DeviceGroup:
+        """
+        Asynchronously update an existing group.
+        
+        Args:
+            group_name: Name of the group to update
+            device_ids: New list of device IDs
+            description: Optional new description
+            
+        Returns:
+            DeviceGroup: The updated group
+            
+        Raises:
+            ValueError: If the group doesn't exist
+        """
+        group = self.get_group(group_name)
+        if not group:
+            raise ValueError(f"Group '{group_name}' doesn't exist")
+        
+        # Update the group properties
+        group.device_ids = device_ids
+        if description is not None:
+            group.description = description
+        
+        # Save the updated group
+        self._update_group(group)
+        
+        return group
+    
+    def _delete_group(self, group_name: str) -> bool:
         """
         Delete a group.
         
@@ -269,6 +350,21 @@ class GroupManager:
         
         logger.info(f"Deleted group '{group_name}'")
         return True
+    
+    # Alias for backward compatibility
+    delete_group = _delete_group
+    
+    async def delete_group(self, group_name: str) -> bool:
+        """
+        Asynchronously delete a group.
+        
+        Args:
+            group_name: Name of the group to delete
+            
+        Returns:
+            bool: True if the group was deleted, False if it didn't exist
+        """
+        return self._delete_group(group_name)
     
     def get_group(self, group_name: str) -> Optional[DeviceGroup]:
         """

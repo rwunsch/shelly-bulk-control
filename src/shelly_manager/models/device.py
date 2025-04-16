@@ -2,6 +2,7 @@ from enum import Enum
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from .device_config import device_config_manager, DeviceTypeConfig
+import json
 
 class DeviceGeneration(str, Enum):
     """Device generation"""
@@ -168,4 +169,45 @@ class Device:
         if "last_seen" in data:
             data["last_seen"] = datetime.fromisoformat(data["last_seen"])
         
-        return cls(**data) 
+        return cls(**data)
+
+    def to_schema(self) -> "DeviceSchema":
+        """Convert to DeviceSchema for API responses"""
+        from src.shelly_manager.models.device_schema import DeviceSchema
+        
+        return DeviceSchema(
+            id=self.id,
+            name=self.name,
+            device_name=self.device_name,
+            device_type=self.device_type,
+            generation=self.generation.value,
+            ip_address=self.ip_address,
+            mac_address=self.mac_address,
+            firmware_version=self.firmware_version,
+            status=self.status.value,
+            discovery_method=self.discovery_method,
+            last_seen=self.last_seen.isoformat() if self.last_seen else None,
+            hostname=self.hostname,
+            timezone=self.timezone,
+            location=self.location,
+            wifi_ssid=self.wifi_ssid,
+            cloud_enabled=self.cloud_enabled,
+            cloud_connected=self.cloud_connected,
+            mqtt_enabled=self.mqtt_enabled,
+            mqtt_server=self.mqtt_server,
+            num_outputs=self.num_outputs,
+            num_meters=self.num_meters,
+            max_power=self.max_power,
+            eco_mode_enabled=self.eco_mode_enabled,
+            model=self.model,
+            slot=self.slot,
+            auth_enabled=self.auth_enabled,
+            auth_domain=self.auth_domain,
+            fw_id=self.fw_id,
+            raw_type=self.raw_type,
+            raw_model=self.raw_model,
+            raw_app=self.raw_app,
+            features=self.features,
+            has_update=self.has_update,
+            restart_required=self.restart_required
+        ) 

@@ -51,6 +51,9 @@ class ShellyListener(ServiceListener):
                     
                     logger.info(f"Discovered Shelly device via mDNS at IP: {ip_address} ({name})")
                     
+                    # Update last mDNS time
+                    self.discovery_service._last_mdns_time = datetime.now()
+                    
                     # Queue this IP for detailed HTTP discovery
                     self.discovery_service._queue_ip_for_http_discovery(ip_address, name, service_type)
             else:
@@ -79,6 +82,9 @@ class ShellyListener(ServiceListener):
                     
                     logger.info(f"Updated Shelly device: {name} - via mDNS at IP: {ip_address}")
                     
+                    # Update last mDNS time
+                    self.discovery_service._last_mdns_time = datetime.now()
+                    
                     # Queue this IP for detailed HTTP discovery
                     self.discovery_service._queue_ip_for_http_discovery(ip_address, name, service_type)
 
@@ -102,6 +108,10 @@ class DiscoveryService:
         # Configurable parameters
         self._chunk_size = chunk_size
         self._mdns_timeout = mdns_timeout
+        # Track last discovery time
+        self._last_discovery_time: Optional[datetime] = None
+        # Track last mDNS received time
+        self._last_mdns_time: Optional[datetime] = None
         
         logger.info("Initializing DiscoveryService")
         logger.debug(f"Debug mode: {debug}")
@@ -287,6 +297,9 @@ class DiscoveryService:
             # Only track as mDNS-discovered if it came from mDNS
             if via_mdns:
                 self._mdns_discovered_ips.add(ip_address)
+            # Update last mDNS time if this came from mDNS
+            if via_mdns:
+                self._last_mdns_time = datetime.now()
 
     async def discover_devices(self, network: str = None, force_http: bool = False, ip_addresses: List[str] = None, auto_optimize: bool = True) -> List[Device]:
         """
@@ -304,6 +317,9 @@ class DiscoveryService:
         Raises:
             ValueError: If no network is specified and auto-detection fails
         """
+        # Update last discovery time
+        self._last_discovery_time = datetime.now()
+        
         # Clear previous discovery data
         self._discovery_queue.clear()
         self._discovered_ips.clear()
@@ -1301,3 +1317,13 @@ class DiscoveryService:
         except Exception as e:
             logger.warning(f"Error estimating optimal chunk size: {e}, using default ({default_chunk_size})")
             return default_chunk_size
+
+    @property
+    def last_discovery_time(self) -> Optional[datetime]:
+        """Get the time of the last device discovery operation"""
+        return self._last_discovery_time
+        
+    @property
+    def last_mdns_time(self) -> Optional[datetime]:
+        """Get the time of the last mDNS device discovery"""
+        return self._last_mdns_time

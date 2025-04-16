@@ -47,6 +47,12 @@ class ParameterService:
         if not self.session:
             self.session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.http_timeout))
     
+    async def initialize(self):
+        """Initialize the parameter service.
+        This is a wrapper around start() for consistent naming across services.
+        """
+        await self.start()
+    
     async def stop(self):
         """Stop the parameter service."""
         if self.session:

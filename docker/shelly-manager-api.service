@@ -1,0 +1,18 @@
+[Unit]
+Description=Shelly Device Manager API Service
+After=network.target
+
+[Service]
+Type=simple
+User=shelly
+Group=shelly
+WorkingDirectory=/opt/shelly-manager
+ExecStart=/opt/shelly-manager/scripts/run_api_server.py --config=/etc/shelly-manager/config.ini
+Restart=on-failure
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=shelly-manager-api
+
+[Install]
+WantedBy=multi-user.target 

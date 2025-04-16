@@ -89,107 +89,53 @@ class DeviceConfigManager:
             raise RuntimeError(f"Failed to load device configurations: {str(e)}")
     
     def get_device_config(self, raw_type: str, raw_app: str, generation: str, raw_model: str = None) -> Optional[DeviceTypeConfig]:
-        """Get device configuration based on raw type and app"""
-        # Convert to lowercase for comparison
-        raw_type = raw_type.lower() if raw_type else ""
-        raw_app = raw_app.lower() if raw_app else ""
-        raw_model = raw_model.lower() if raw_model else ""
-        
+        """Get device configuration based on raw model, type, and app"""
         logger = get_logger(__name__)
-        logger.debug(f"Matching device type: gen={generation}, raw_type={raw_type}, raw_app={raw_app}, raw_model={raw_model}")
         
-        # Special case for Gen1 devices - match by raw_type
-        if generation == "gen1":
-            for device_id, device_config in self.gen1_devices.items():
-                if raw_type and device_id.lower() in raw_type.lower():
-                    logger.debug(f"Matched Gen1 device: {device_id}")
-                    return device_config
-            logger.debug(f"No Gen1 device match found for raw_type={raw_type}")
-            return None
+        # Normalize inputs
+        raw_model = raw_model.upper() if raw_model else ""
+        raw_type = raw_type.upper() if raw_type else ""
+        raw_app = raw_app.lower() if raw_app else ""
         
-        # For all other generations (Gen2+), match by app field
-        device_types = {
+        logger.debug(f"Matching device: model={raw_model}, type={raw_type}, app={raw_app}, gen={generation}")
+        
+        # Get the appropriate device dictionary based on generation
+        devices = {
+            "gen1": self.gen1_devices,
             "gen2": self.gen2_devices,
             "gen3": self.gen3_devices,
-            "gen4": self.gen4_devices
+            "gen4": self.gen4_devices,
         }.get(generation, {})
         
-        logger.debug(f"Available {generation} devices: {list(device_types.keys())}")
-        
-        # First try exact match by app field (case-insensitive)
+        # Try direct model match first (most reliable)
+        if raw_model:
+            for device_id, config in devices.items():
+                if device_id.upper() == raw_model:
+                    logger.debug(f"Matched device by model: {device_id}")
+                    return config
+            
+        # For Gen1, try matching by raw_type (backward compatibility)
+        if generation == "gen1" and raw_type:
+            for device_id, config in devices.items():
+                if device_id.upper() in raw_type:
+                    logger.debug(f"Matched Gen1 device by type: {device_id}")
+                    return config
+                
+        # As last resort, try matching by app
         if raw_app:
-            for device_id, device_config in device_types.items():
-                # Case-insensitive comparison
-                logger.debug(f"Comparing {device_id.lower()} with {raw_app.lower()}")
-                if device_id.lower() == raw_app.lower():
-                    logger.debug(f"Matched {generation} device by app (exact): {device_id}")
-                    return device_config
+            # Try exact match
+            for device_id, config in devices.items():
+                if device_id.lower() == raw_app:
+                    logger.debug(f"Matched device by app: {device_id}")
+                    return config
             
-            # If no exact match, try more specific matches first (longer device IDs)
-            # Sort by length descending so we check longer names first (e.g., Plus1PM before Plus1)
-            sorted_device_ids = sorted(device_types.keys(), key=len, reverse=True)
-            
-            for device_id in sorted_device_ids:
-                device_config = device_types[device_id]
-                # Try to see if the app name contains the device ID
-                logger.debug(f"Trying partial match (specific-first) - {device_id.lower()} vs {raw_app.lower()}")
-                if device_id.lower() in raw_app.lower():
-                    logger.debug(f"Matched {generation} device by app (specific-first): {device_id} - {raw_app}")
-                    return device_config
-            
-            # If still no match, try contains match in either direction
-            for device_id, device_config in device_types.items():
-                logger.debug(f"Trying fallback partial match - {device_id.lower()} vs {raw_app.lower()}")
-                if raw_app.lower() in device_id.lower():
-                    logger.debug(f"Matched {generation} device by app (fallback): {device_id} - {raw_app}")
-                    return device_config
+            # Try partial match
+            for device_id, config in devices.items():
+                if device_id.lower() in raw_app or raw_app in device_id.lower():
+                    logger.debug(f"Matched device by partial app: {device_id}")
+                    return config
         
-        # Additional mapping for special cases - adding common name mappings
-        app_mappings = {
-            # Gen2 mappings
-            "plugs": "PlusPlugS",     # Shelly Plus Plug S
-            "plug": "PlusPlugS",      # Alternate name
-            "plus1pm": "Plus1PM",     # Shelly Plus 1PM
-            "plus1": "Plus1",         # Shelly Plus 1 (without PM)
-            "plus2pm": "Plus2PM",     # Shelly Plus 2PM
-            "plus2": "Plus2",         # Shelly Plus 2 (without PM)
-            "plus4pm": "Plus4PM",     # Shelly Plus 4PM
-            "plus4": "Plus4",         # Shelly Plus 4 (without PM)
-            
-            # Gen3 mappings
-            "mini1pmg3": "Mini1PMG3", # Shelly Mini 1PM Gen3
-            "minig3": "Mini1PMG3",    # Alternate name
-        }
-        
-        logger.debug(f"Checking app mappings for {raw_app}")
-        if raw_app and raw_app.lower() in app_mappings:
-            mapped_device_id = app_mappings[raw_app.lower()]
-            logger.debug(f"Found app mapping: {raw_app} -> {mapped_device_id}")
-            if mapped_device_id in device_types:
-                logger.debug(f"Matched {generation} device through app mapping: {raw_app} -> {mapped_device_id}")
-                return device_types[mapped_device_id]
-        
-        # If still no match, try model-based matching as last resort
-        # This is useful for devices that don't have a clear app value that matches our device types
-        model_mappings = {
-            # Gen2 model mappings
-            "snpl-00112eu": "PlusPlugS",  # Shelly Plus Plug S
-            "snsw-001p16eu": "Plus1PM",   # Shelly Plus 1PM
-            
-            # Gen3 model mappings
-            "s3sw-001p8eu": "Mini1PMG3",  # Shelly Mini 1PM Gen3
-        }
-        
-        # Try to match using raw_model if available
-        logger.debug(f"Checking model mappings for {raw_model}")
-        for model_pattern, device_id in model_mappings.items():
-            logger.debug(f"Comparing model pattern {model_pattern} with {raw_model}")
-            if model_pattern in raw_model:
-                if device_id in device_types:
-                    logger.debug(f"Matched {generation} device through model mapping: {raw_model} -> {device_id}")
-                    return device_types[device_id]
-        
-        logger.debug(f"No {generation} device match found for raw_app={raw_app}, raw_model={raw_model}")
+        logger.debug(f"No device match found for gen={generation}, model={raw_model}, type={raw_type}, app={raw_app}")
         return None
 
 # Create a global instance

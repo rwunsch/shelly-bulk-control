@@ -10,7 +10,7 @@ import asyncio
 from datetime import datetime
 import time
 
-from ...models.device import Device
+from ...models.device import Device, DeviceGeneration
 from ...models.device_schema import DeviceSchema
 from ...discovery.discovery_service import DiscoveryService
 from ...config_manager.config_manager import ConfigManager
@@ -99,6 +99,13 @@ config_manager = ConfigManager()
 group_manager = GroupManager()
 parameter_service = ParameterService()
 command_service = GroupCommandService(group_manager)
+
+# Dependency injection helper functions
+def get_config_manager():
+    return config_manager
+
+def get_device_manager():
+    return discovery_service
 
 # Configuration for periodic discovery
 DEFAULT_DISCOVERY_INTERVAL = 300  # 5 minutes in seconds
@@ -211,21 +218,59 @@ async def get_device_settings(device_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/devices/{device_id}/settings", response_model=SetParametersResponse)
-async def update_device_settings(device_id: str, settings: Dict[str, Any]):
-    """Update settings for a specific device"""
-    devices = {device.id: device for device in discovery_service.devices}
+@app.post("/devices/{device_id}/settings", response_model=Dict[str, Any])
+async def update_device_settings(
+    device_id: str, 
+    settings: Dict[str, Any],
+    config_manager: ConfigManager = Depends(get_config_manager),
+    device_manager: DiscoveryService = Depends(get_device_manager),
+):
+    """Update device settings"""
+    logger.info(f"API request: Update settings for device {device_id}")
+    logger.debug(f"Request settings data: {settings}")
+    
+    # Get the device
+    devices = {device.id: device for device in device_manager.devices}
     if device_id not in devices:
-        raise HTTPException(status_code=404, detail="Device not found")
+        logger.warning(f"Device not found: {device_id}")
+        raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
     
     device = devices[device_id]
-    try:
-        success = await config_manager.apply_settings(device, settings)
-        if not success:
-            raise HTTPException(status_code=500, detail="Failed to apply settings")
-        return {"status": "success", "details": settings}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    
+    # For Gen1 devices, check if we need to convert flat MQTT settings to nested format
+    if device.generation == DeviceGeneration.GEN1:
+        mqtt_related_keys = [k for k in settings.keys() if k.startswith('mqtt_')]
+        if mqtt_related_keys:
+            logger.info(f"Converting flat MQTT settings to nested format for Gen1 device {device_id}")
+            # Create a nested mqtt structure
+            mqtt_settings = {}
+            
+            for key in mqtt_related_keys:
+                # Strip mqtt_ prefix and use the remainder as the nested key
+                nested_key = key[5:]  # Remove 'mqtt_' prefix
+                mqtt_settings[nested_key] = settings[key]
+                settings.pop(key)  # Remove the flat key
+                
+                logger.debug(f"Converted {key}={mqtt_settings[nested_key]} to nested format")
+            
+            # Add the nested mqtt dictionary to settings
+            settings["mqtt"] = mqtt_settings
+            logger.debug(f"Final nested MQTT settings: {settings['mqtt']}")
+    
+    # Apply settings
+    success = await config_manager.apply_settings(device, settings)
+    if not success:
+        logger.error(f"Failed to update settings for device {device_id}")
+        raise HTTPException(status_code=500, detail=f"Failed to update settings for device {device_id}")
+    
+    # Get the updated device settings
+    updated_settings = await config_manager.get_device_settings(device)
+    if not updated_settings:
+        logger.error(f"Failed to retrieve updated settings for device {device_id}")
+        raise HTTPException(status_code=500, detail=f"Failed to retrieve updated settings for device {device_id}")
+    
+    logger.info(f"Successfully updated settings for device {device_id}")
+    return updated_settings
 
 @app.post("/devices/{device_id}/operation", response_model=OperationResponse)
 async def perform_device_operation(device_id: str, operation_request: OperationRequest):

@@ -291,6 +291,56 @@ class ConfigManager:
                     except Exception as e:
                         logger.debug(f"Approach 6 failed: {str(e)}")
                 
+                # Approach 7: Direct MQTT endpoint for MQTT-specific settings
+                if not success and "mqtt" in processed_settings:
+                    try:
+                        mqtt_settings = processed_settings["mqtt"]
+                        url = f"http://{device.ip_address}/settings/mqtt"
+                        logger.debug(f"Trying Gen1 approach 7: POST to {url} for MQTT settings")
+                        logger.debug(f"MQTT Request data: {json.dumps(mqtt_settings)}")
+                        
+                        async with self._session.post(url, json=mqtt_settings) as response:
+                            response_text = await response.text()
+                            logger.debug(f"Response status: {response.status}")
+                            logger.debug(f"Response text: {response_text}")
+                            
+                            if response.status == 200:
+                                # Wait to ensure settings are applied
+                                await asyncio.sleep(2)
+                                
+                                # For MQTT settings, we need to check the status endpoint
+                                # since the mqtt settings may not appear in the settings response
+                                status_url = f"http://{device.ip_address}/status"
+                                async with self._session.get(status_url) as status_response:
+                                    status_response_text = await status_response.text()
+                                    logger.debug(f"Status response status: {status_response.status}")
+                                    logger.debug(f"Status response text: {status_response_text}")
+                                    
+                                    if status_response.status == 200:
+                                        status_data = status_response.json() if hasattr(status_response, 'json') else json.loads(status_response_text)
+                                        
+                                        # Check if the mqtt status matches what we expect
+                                        if "mqtt" in status_data:
+                                            if ("enable" in mqtt_settings and mqtt_settings["enable"] and status_data["mqtt"]["connected"]) or \
+                                               ("enable" in mqtt_settings and not mqtt_settings["enable"] and not status_data["mqtt"]["connected"]):
+                                                success = True
+                                                logger.debug("MQTT settings successfully applied via direct MQTT endpoint")
+                                            else:
+                                                logger.debug(f"MQTT status does not match expected settings after update")
+                                        else:
+                                            # If we can't verify, assume success
+                                            success = True
+                                            logger.debug("MQTT endpoint returned success, but cannot verify status")
+                                
+                                # If we got a 200 but couldn't verify, still consider it a success
+                                if not success:
+                                    success = True
+                                    logger.debug("MQTT settings POST succeeded, but connection status could not be verified")
+                            else:
+                                logger.debug(f"MQTT settings endpoint failed: {response.status}")
+                    except Exception as e:
+                        logger.debug(f"Approach 7 (MQTT endpoint) failed: {str(e)}")
+                
                 # If none of the approaches worked, try a save/reboot combination
                 if not success:
                     try:

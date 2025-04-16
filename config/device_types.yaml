@@ -425,6 +425,23 @@ gen2_devices:
       - websocket
       - scripting
 
+  Plus1PMMini:
+    name: "Shelly Plus 1PM Mini"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 2000
+    features:
+      - power_monitoring
+      - eco_mode
+      - led_control
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - compact_design
+
   PlusPlug:
     name: "Shelly Plus Plug"
     type: "plug"
@@ -781,8 +798,40 @@ gen2_devices:
       - scripting
       - din_rail_mounting
 
-  Pro3:
-    name: "Shelly Pro 3"
+  Pro1PMMini:
+    name: "Shelly Pro 1PM Mini"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 1
+    num_meters: 1
+    max_power: 4000
+    features:
+      - power_monitoring
+      - eco_mode
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - compact_design
+      
+  Pro2PMMini:
+    name: "Shelly Pro 2PM Mini"
+    type: "relay"
+    generation: "gen2"
+    num_outputs: 2
+    num_meters: 2
+    max_power: 4000
+    features:
+      - power_monitoring
+      - roller_mode
+      - cloud_connectivity
+      - mqtt
+      - websocket
+      - scripting
+      - compact_design
+      
+  Pro3Mini:
+    name: "Shelly Pro 3 Mini"
     type: "relay"
     generation: "gen2"
     num_outputs: 3
@@ -793,7 +842,7 @@ gen2_devices:
       - mqtt
       - websocket
       - scripting
-      - din_rail_mounting
+      - compact_design
 
   Pro4PM:
     name: "Shelly Pro 4PM"
@@ -981,52 +1030,6 @@ gen2_devices:
       - scripting
       - din_rail_mounting
       
-  Pro1PMMini:
-    name: "Shelly Pro 1PM Mini"
-    type: "relay"
-    generation: "gen2"
-    num_outputs: 1
-    num_meters: 1
-    max_power: 4000
-    features:
-      - power_monitoring
-      - eco_mode
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - scripting
-      - compact_design
-
-  Pro2PMMini:
-    name: "Shelly Pro 2PM Mini"
-    type: "relay"
-    generation: "gen2"
-    num_outputs: 2
-    num_meters: 2
-    max_power: 4000
-    features:
-      - power_monitoring
-      - roller_mode
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - scripting
-      - compact_design
-
-  Pro3Mini:
-    name: "Shelly Pro 3 Mini"
-    type: "relay"
-    generation: "gen2"
-    num_outputs: 3
-    num_meters: 0
-    max_power: 4000
-    features:
-      - cloud_connectivity
-      - mqtt
-      - websocket
-      - scripting
-      - compact_design
-
   Pro4PMMini:
     name: "Shelly Pro 4PM Mini"
     type: "relay"

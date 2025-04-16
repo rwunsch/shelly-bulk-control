@@ -20,7 +20,38 @@ def setup_logging(log_level: str = "INFO"):
     )
     log_config.configure()
     
-    # Set log level for specific modules
+    # Configure more specific logging - make sure these use the right log level
+    logging_level = logging.DEBUG if debug else logging.INFO
+
+    # Configure all API-related and web server loggers
+    api_loggers = [
+        # Core API modules
+        "shelly_manager.interfaces.api",
+        "shelly_manager.interfaces.api.main",
+        "shelly_manager.interfaces.api.server",
+        # Web server components
+        "uvicorn",
+        "uvicorn.access",
+        "uvicorn.error",
+        "fastapi",
+        # Include HTTP request logging
+        "uvicorn.access",
+        # Include ASGI protocol handlers
+        "uvicorn.protocols",
+        # Include server-related components
+        "starlette",
+        # Include third-party libraries
+        "pydantic",
+    ]
+    
+    # Set the appropriate log level for all API-related loggers
+    for logger_name in api_loggers:
+        module_logger = logging.getLogger(logger_name)
+        module_logger.setLevel(logging_level)
+        # Make sure these loggers propagate to root
+        module_logger.propagate = True
+        
+    # Also configure the full app modules
     if debug:
         # Enable debug logging for all key modules
         for module in [
@@ -35,11 +66,10 @@ def setup_logging(log_level: str = "INFO"):
             "shelly_manager.services",
             "shelly_manager.state",
             "aiohttp",
-            "uvicorn",
-            "fastapi",
         ]:
             module_logger = logging.getLogger(module)
             module_logger.setLevel(logging.DEBUG)
+            module_logger.propagate = True
     
     # Get the root logger and log that we've set up logging
     logger = get_logger("shelly_manager.api")

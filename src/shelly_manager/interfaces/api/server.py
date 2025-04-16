@@ -2,6 +2,7 @@ import os
 import uvicorn
 import argparse
 import logging
+import logging.config
 from configparser import ConfigParser
 from pathlib import Path
 
@@ -79,17 +80,38 @@ def run_server():
     # Map log level to uvicorn format (all lowercase)
     uvicorn_log_level = log_level.lower()
     
+    # Create custom ASGI configuration to force using our log config
+    log_config = {
+        "version": 1,
+        "disable_existing_loggers": False,
+        "handlers": {
+            "default": {
+                "class": "logging.NullHandler",
+            },
+        },
+        "loggers": {
+            "uvicorn": {"handlers": ["default"], "level": "INFO", "propagate": True},
+            "uvicorn.error": {"handlers": ["default"], "level": "INFO", "propagate": True},
+            "uvicorn.access": {"handlers": ["default"], "level": "INFO", "propagate": True},
+        },
+    }
+    
     # Start server
-    uvicorn.run(
-        "shelly_manager.interfaces.api.main:app",
-        host=host,
-        port=port,
-        reload=False,
-        log_level=uvicorn_log_level,
-        # Disable uvicorn's default logging configuration
-        # so it uses our centralized logging
-        log_config=None
-    )
+    logger.info("Starting Uvicorn server with shared logging configuration")
+    try:
+        uvicorn.run(
+            "shelly_manager.interfaces.api.main:app",
+            host=host,
+            port=port,
+            reload=False,
+            log_level=uvicorn_log_level,
+            # Explicitly disable uvicorn's default logging
+            log_config=log_config,
+            access_log=True
+        )
+    except Exception as e:
+        logger.error(f"Error starting API server: {str(e)}")
+        raise
 
 if __name__ == "__main__":
     run_server() 

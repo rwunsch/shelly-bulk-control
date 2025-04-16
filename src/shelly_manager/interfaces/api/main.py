@@ -125,6 +125,8 @@ async def startup_event():
     """Initialize services on startup"""
     global background_discovery_task
     
+    logger.info("API server starting: Initializing services")
+    
     await discovery_service.start()
     await config_manager.start()
     await group_manager.load_groups()
@@ -132,20 +134,23 @@ async def startup_event():
     
     # Start device discovery automatically on startup
     try:
-        logger.info("Starting automatic device discovery on startup")
+        logger.info("API server: Starting automatic device discovery on startup")
         await discovery_service.discover_devices()
-        logger.info(f"Discovered {len(discovery_service.devices)} devices")
+        logger.info(f"API server: Discovered {len(discovery_service.devices)} devices")
     except Exception as e:
-        logger.error(f"Error during automatic device discovery: {str(e)}")
+        logger.error(f"API server error during automatic device discovery: {str(e)}")
     
     # Start background task for periodic discovery
     background_discovery_task = asyncio.create_task(periodic_discovery())
-    logger.info(f"Started background discovery task with interval of {discovery_interval} seconds")
+    logger.info(f"API server: Started background discovery task with interval of {discovery_interval} seconds")
+    logger.info("API server startup complete")
 
 @app.on_event("shutdown")
 async def shutdown_event():
     """Clean up services on shutdown"""
     global background_discovery_task
+    
+    logger.info("API server shutting down: Cleaning up services")
     
     # Cancel the background task if it's running
     if background_discovery_task:
@@ -153,10 +158,12 @@ async def shutdown_event():
         try:
             await background_discovery_task
         except asyncio.CancelledError:
-            logger.info("Background discovery task cancelled")
+            logger.info("API server: Background discovery task cancelled")
     
     await discovery_service.stop()
     await config_manager.stop()
+    
+    logger.info("API server shutdown complete")
 
 # Add root endpoint
 @app.get("/")
@@ -250,14 +257,18 @@ async def get_groups():
 @app.post("/groups", response_model=GroupModel)
 async def create_group(group: GroupModel):
     """Create a new device group"""
+    logger.info(f"API request: Creating group '{group.name}' with {len(group.device_ids)} devices")
+    
     # Verify that all device IDs exist
     device_ids = {device.id for device in discovery_service.devices}
     for device_id in group.device_ids:
         if device_id not in device_ids:
+            logger.warning(f"API request failed: Device {device_id} not found when creating group '{group.name}'")
             raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
     
     # Check if group already exists
     if group_manager.get_group(group.name):
+        logger.warning(f"API request failed: Group '{group.name}' already exists")
         raise HTTPException(status_code=409, detail=f"Group '{group.name}' already exists")
     
     # Create group - use correct parameter order: name, device_ids, description
@@ -266,6 +277,7 @@ async def create_group(group: GroupModel):
         device_ids=group.device_ids,
         description=group.description
     )
+    logger.info(f"API request successful: Created group '{group.name}' with {len(created_group.device_ids)} devices")
     return created_group
 
 @app.get("/groups/{group_name}", response_model=GroupModel)

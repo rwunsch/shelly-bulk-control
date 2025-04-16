@@ -468,17 +468,18 @@ class ParameterService:
         logger.warning(f"Parameter {parameter_name} not found for Gen2/Gen3 device {device.id}")
         return False, None
     
-    async def set_parameter_value(self, device: Device, parameter_name: str, value: Any) -> Tuple[bool, Optional[Dict]]:
+    async def set_parameter_value(self, device: Device, parameter_name: str, value: Any, auto_restart: bool = False) -> Tuple[bool, Optional[Dict]]:
         """
         Set a parameter value on a device.
         
         Args:
-            device: The device
-            parameter_name: The parameter name
-            value: The value to set
+            device: The device to set the parameter on
+            parameter_name: The name of the parameter
+            value: The new value for the parameter
+            auto_restart: Whether to automatically restart the device if required
             
         Returns:
-            Tuple of (success, response_data)
+            Tuple of (success, response)
         """
         if not device.ip_address:
             logger.error(f"Cannot set parameter: Device {device.id} has no IP address")
@@ -487,16 +488,30 @@ class ParameterService:
         # Check if we have a capability for this device type
         capability = device_capabilities.get_capability_for_device(device)
         
+        # Check if this is a restart-requiring parameter
+        restart_required = False
+        if capability and parameter_name in capability.parameters:
+            restart_required = capability.parameters[parameter_name].get("requires_restart", False)
+        
         try:
             # Choose appropriate method based on device generation
             if device.generation == DeviceGeneration.GEN1:
-                return await self._set_gen1_parameter(device, parameter_name, value, capability)
+                success, response = await self._set_gen1_parameter(device, parameter_name, value, capability)
             else:
-                return await self._set_gen2_parameter(device, parameter_name, value, capability)
-                
+                success, response = await self._set_gen2_parameter(device, parameter_name, value, capability)
+            
+            # Handle automatic device restart if needed and requested
+            if success and restart_required and auto_restart:
+                logger.info(f"Parameter '{parameter_name}' requires device restart. Restarting {device.id}...")
+                restart_success = await self._restart_device(device)
+                if not restart_success:
+                    logger.warning(f"Failed to restart device {device.id} after setting parameter")
+                    # The parameter was set successfully, so we still return success=True
+            
+            return success, response
         except Exception as e:
             logger.error(f"Error setting parameter {parameter_name} on device {device.id}: {str(e)}")
-            return False, {"error": str(e)}
+            return False, None
 
     async def _set_gen1_parameter(self, device: Device, parameter_name: str, value: Any, 
                                  capability: Optional[DeviceCapability]) -> Tuple[bool, Optional[Dict]]:
@@ -697,4 +712,72 @@ class ParameterService:
                 if not param_info.get("read_only", True)
             }
             
-        return all_params 
+        return all_params
+
+    async def _restart_device(self, device: Device) -> bool:
+        """
+        Restart a device.
+        
+        Args:
+            device: The device to restart
+            
+        Returns:
+            True if restart was successful, False otherwise
+        """
+        if not device.ip_address:
+            logger.error(f"Cannot restart device: Device {device.id} has no IP address")
+            return False
+        
+        try:
+            # Choose appropriate method based on device generation
+            if device.generation == DeviceGeneration.GEN1:
+                # Gen1 devices use /reboot endpoint
+                url = f"http://{device.ip_address}/reboot"
+                
+                # Make the request
+                if not self.session:
+                    await self.start()
+                    
+                async with self.session.get(url) as response:
+                    if response.status == 200:
+                        logger.info(f"Successfully restarted device {device.id}")
+                        return True
+                    else:
+                        logger.warning(f"Failed to restart device {device.id}: HTTP {response.status}")
+                        return False
+                    
+            else:
+                # Gen2 devices use Shelly.Reboot RPC method
+                url = f"http://{device.ip_address}/rpc"
+                
+                # Create request data
+                data = {
+                    "id": 1,
+                    "method": "Shelly.Reboot",
+                    "params": {}
+                }
+                
+                # Make the request
+                if not self.session:
+                    await self.start()
+                    
+                async with self.session.post(url, json=data) as response:
+                    if response.status == 200:
+                        try:
+                            result = await response.json()
+                            # Check if there's an error in the response
+                            if "error" in result:
+                                logger.warning(f"Error restarting device {device.id}: {result['error']}")
+                                return False
+                            logger.info(f"Successfully restarted device {device.id}")
+                            return True
+                        except Exception as e:
+                            logger.warning(f"Error parsing restart response for device {device.id}: {str(e)}")
+                            return False
+                    else:
+                        logger.warning(f"Failed to restart device {device.id}: HTTP {response.status}")
+                        return False
+                    
+        except Exception as e:
+            logger.error(f"Error restarting device {device.id}: {str(e)}")
+            return False 

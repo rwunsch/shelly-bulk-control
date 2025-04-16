@@ -216,12 +216,15 @@ def set_parameter(
     value: str = typer.Argument(..., help="Value to set"),
     device_id: Optional[str] = typer.Option(None, "--device", "-d", help="Device ID to set parameter on"),
     group_name: Optional[str] = typer.Option(None, "--group", "-g", help="Set parameter on all devices in this group"),
+    auto_restart: bool = typer.Option(False, "--restart", "-r", help="Automatically restart device if required"),
     debug: bool = typer.Option(False, "--debug", "-d", help="Enable debug mode")
 ):
     """
     Set a parameter value on a device or group of devices.
     
     This command sets the value of a parameter for a specific device or all devices in a group.
+    Some parameters may require device restart to take effect. Use the --restart flag to
+    automatically restart devices when needed.
     
     Examples:
         - Set eco_mode on a single device:
@@ -229,13 +232,16 @@ def set_parameter(
           
         - Set max_power on all devices in a group:
           shelly-manager parameters set max_power 2000 --group living_room
+          
+        - Set network configuration with automatic restart:
+          shelly-manager parameters set static_ip_config true --device abc123 --restart
     """
     # Run the async function
-    asyncio.run(_set_parameter_async(parameter, value, device_id, group_name, debug))
+    asyncio.run(_set_parameter_async(parameter, value, device_id, group_name, auto_restart, debug))
 
 
 async def _set_parameter_async(parameter_name: str, value_str: str, device_id: Optional[str] = None, 
-                               group_name: Optional[str] = None, debug: bool = False):
+                               group_name: Optional[str] = None, auto_restart: bool = False, debug: bool = False):
     """Set a parameter value on a device or group."""
     # Set up logging
     configure_logging(debug=debug)
@@ -250,123 +256,100 @@ async def _set_parameter_async(parameter_name: str, value_str: str, device_id: O
     
     # Initialize services
     parameter_service = ParameterService()
-    group_manager = None
-    
-    if group_name:
-        group_manager = GroupManager()
     
     try:
         # Start parameter service
         await parameter_service.start()
         
-        # Handle single device case
+        # For single device
         if device_id:
             device = device_registry.get_device(device_id)
             if not device:
                 console.print(f"[red]Error: Device with ID {device_id} not found[/red]")
                 return
             
-            console.print(f"[cyan]Setting parameter '{parameter_name}' for {device.name} ({device.id}) to '{value}'...[/cyan]")
+            console.print(f"[cyan]Setting parameter '{parameter_name}' to '{value}' on {device.name} ({device.id})...[/cyan]")
             
-            # Get capability for validation
-            capability = device_capabilities.get_capability_for_device(device)
-            if capability:
-                param_details = capability.get_parameter_details(parameter_name)
-                if not param_details:
-                    console.print(f"[yellow]Warning: Parameter '{parameter_name}' is not defined for this device type.[/yellow]")
-                    console.print("[yellow]The operation might fail if the parameter doesn't exist.[/yellow]")
-                elif param_details.get("read_only", True):
-                    console.print(f"[red]Error: Parameter '{parameter_name}' is read-only for this device type.[/red]")
-                    return
-            
-            # Set parameter on the device
-            success, result = await parameter_service.set_parameter_value(device, parameter_name, value)
+            # Set parameter value
+            success, response = await parameter_service.set_parameter_value(device, parameter_name, value, auto_restart=auto_restart)
             
             if success:
-                console.print(f"[green]Successfully set {parameter_name} = {value} for {device.name}[/green]")
-                
-                # Check if device needs a restart
-                if isinstance(result, dict) and result.get("restart_required", False):
-                    console.print(f"[yellow]Device {device.name} requires a restart to apply changes[/yellow]")
+                console.print(f"[green]Successfully set parameter '{parameter_name}' on device {device.name}[/green]")
+                if auto_restart:
+                    console.print("[yellow]Note: Device may have been restarted if required by the parameter[/yellow]")
             else:
-                console.print(f"[red]Failed to set {parameter_name} for {device.name}[/red]")
-                if isinstance(result, dict) and "error" in result:
-                    console.print(f"[red]Error details: {result['error']}[/red]")
+                console.print(f"[red]Failed to set parameter '{parameter_name}' on device {device.name}[/red]")
+                if response and isinstance(response, dict) and "error" in response:
+                    console.print(f"[red]Error: {response['error']}[/red]")
         
-        # Handle group case
+        # For group
         elif group_name:
-            # Get the group
-            group = group_manager.get_group(group_name)
-            if not group:
+            # Get group manager
+            group_manager = GroupManager()
+            
+            # Load groups
+            groups = group_manager.load_groups()
+            
+            # Check if group exists
+            if group_name not in groups:
                 console.print(f"[red]Error: Group '{group_name}' not found[/red]")
                 return
             
-            console.print(f"[cyan]Setting parameter '{parameter_name}' to '{value}' for all devices in group '{group_name}'...[/cyan]")
+            # Get devices in group
+            device_ids = groups[group_name]
+            devices = []
             
-            # Get devices in the group
-            devices = device_registry.get_devices(group.device_ids)
+            for did in device_ids:
+                device = device_registry.get_device(did)
+                if device:
+                    devices.append(device)
+            
             if not devices:
-                console.print(f"[yellow]Warning: No devices found in group '{group_name}'[/yellow]")
+                console.print(f"[red]Error: No devices found in group '{group_name}'[/red]")
                 return
             
-            console.print(f"[cyan]Found {len(devices)} devices in group '{group_name}'[/cyan]")
+            console.print(f"[cyan]Setting parameter '{parameter_name}' to '{value}' on {len(devices)} devices in group '{group_name}'...[/cyan]")
             
-            # Set up progress tracking
-            success_count = 0
-            failure_count = 0
-            
+            # Set parameter on each device in the group
             with Progress(
                 SpinnerColumn(),
                 TextColumn("[progress.description]{task.description}"),
                 console=console
             ) as progress:
-                task = progress.add_task(f"[cyan]Setting parameter on devices...[/cyan]", total=len(devices))
+                # Create a task for overall progress
+                task = progress.add_task(f"Setting parameter on {len(devices)} devices...", total=len(devices))
                 
+                # Initialize success/failure counters
+                success_count = 0
+                failure_count = 0
+                
+                # Process each device
                 for device in devices:
-                    progress.update(task, description=f"[cyan]Setting parameter on {device.name} ({device.id})...[/cyan]")
+                    # Update task description
+                    progress.update(task, description=f"Setting parameter on {device.name} ({device.id})...")
                     
-                    # Get capability for validation
-                    capability = device_capabilities.get_capability_for_device(device)
-                    if capability:
-                        param_details = capability.get_parameter_details(parameter_name)
-                        if not param_details:
-                            progress.console.print(f"[yellow]  Warning: Parameter '{parameter_name}' is not defined for {device.id}, skipping[/yellow]")
-                            failure_count += 1
-                            progress.advance(task)
-                            continue
-                        elif param_details.get("read_only", True):
-                            progress.console.print(f"[yellow]  Warning: Parameter '{parameter_name}' is read-only for {device.id}, skipping[/yellow]")
-                            failure_count += 1
-                            progress.advance(task)
-                            continue
+                    # Set parameter value
+                    success, response = await parameter_service.set_parameter_value(device, parameter_name, value, auto_restart=auto_restart)
                     
-                    # Set parameter on the device
-                    try:
-                        success, result = await parameter_service.set_parameter_value(device, parameter_name, value)
-                        
-                        if success:
-                            progress.console.print(f"[green]  Set {parameter_name} = {value} for {device.name}[/green]")
-                            success_count += 1
-                            
-                            # Check if device needs a restart
-                            if isinstance(result, dict) and result.get("restart_required", False):
-                                progress.console.print(f"[yellow]  Device {device.name} requires a restart to apply changes[/yellow]")
-                        else:
-                            progress.console.print(f"[red]  Failed to set {parameter_name} for {device.name}[/red]")
-                            if isinstance(result, dict) and "error" in result:
-                                progress.console.print(f"[red]  Error details: {result['error']}[/red]")
-                            failure_count += 1
-                    except Exception as e:
-                        progress.console.print(f"[red]  Error setting {parameter_name} for {device.name}: {str(e)}[/red]")
+                    # Update counters
+                    if success:
+                        success_count += 1
+                    else:
                         failure_count += 1
                     
-                    progress.advance(task)
+                    # Update progress
+                    progress.update(task, advance=1)
             
-            # Show summary
+            # Display results
             if success_count == len(devices):
-                console.print(f"[green]Parameter successfully set on all {len(devices)} devices[/green]")
+                console.print(f"[green]Successfully set parameter '{parameter_name}' on all {len(devices)} devices in group '{group_name}'[/green]")
+                if auto_restart:
+                    console.print("[yellow]Note: Devices may have been restarted if required by the parameter[/yellow]")
+            elif success_count > 0:
+                console.print(f"[yellow]Set parameter '{parameter_name}' on {success_count}/{len(devices)} devices in group '{group_name}'[/yellow]")
+                console.print(f"[red]{failure_count} device(s) failed[/red]")
             else:
-                console.print(f"[yellow]Parameter set on {success_count} of {len(devices)} devices with {failure_count} failures[/yellow]")
+                console.print(f"[red]Failed to set parameter '{parameter_name}' on any device in group '{group_name}'[/red]")
     
     finally:
         # Stop parameter service
@@ -880,4 +863,426 @@ async def set_night_mode(
             console.print(f"[bold yellow]Warning:[/bold yellow] Device doesn't support night mode")
             
     except Exception as e:
-        console.print(f"[bold red]Error:[/bold red] {str(e)}") 
+        console.print(f"[bold red]Error:[/bold red] {str(e)}")
+
+
+@common_app.command("mqtt-config")
+def set_mqtt_configuration(
+    ctx: typer.Context,
+    enable: bool = typer.Option(True, "--enable/--disable", help="Enable or disable MQTT"),
+    server: str = typer.Option(..., "--server", "-s", help="MQTT broker server address"),
+    port: int = typer.Option(1883, "--port", "-p", help="MQTT broker port"),
+    username: Optional[str] = typer.Option(None, "--username", "-u", help="MQTT username"),
+    password: Optional[str] = typer.Option(None, "--password", "-w", help="MQTT password"),
+    device_id: Optional[str] = typer.Option(None, "--device", "-d", help="Device ID to set parameter on"),
+    group_name: Optional[str] = typer.Option(None, "--group", "-g", help="Set parameter on all devices in this group"),
+    auto_restart: bool = typer.Option(False, "--restart", "-r", help="Automatically restart devices if required"),
+    debug: bool = typer.Option(False, "--debug", help="Enable debug mode"),
+):
+    """
+    Configure MQTT settings for a device or group of devices.
+    
+    This command sets multiple MQTT parameters in one operation.
+    
+    Examples:
+        - Configure MQTT on a single device:
+          shelly-manager parameters common mqtt-config --server mqtt.home --device abc123
+          
+        - Configure MQTT with authentication for a group:
+          shelly-manager parameters common mqtt-config --server mqtt.home --username user --password pass --group living_room
+    """
+    asyncio.run(_set_mqtt_configuration_async(
+        enable, server, port, username, password, device_id, group_name, auto_restart, debug
+    ))
+
+
+async def _set_mqtt_configuration_async(
+    enable: bool,
+    server: str,
+    port: int,
+    username: Optional[str],
+    password: Optional[str],
+    device_id: Optional[str],
+    group_name: Optional[str],
+    auto_restart: bool,
+    debug: bool
+):
+    """Set MQTT configuration on a device or group."""
+    # Set up logging
+    configure_logging(debug=debug)
+    
+    # Check that at least one of device_id or group_name is provided
+    if not device_id and not group_name:
+        console.print("[red]Error: Either --device or --group must be specified[/red]")
+        return
+    
+    # Initialize services
+    parameter_service = ParameterService()
+    
+    # Prepare parameter dictionary
+    params = {
+        "mqtt_enable": enable,
+        "mqtt_server": server,
+        "mqtt_port": port
+    }
+    
+    # Add optional parameters if provided
+    if username is not None:
+        params["mqtt_username"] = username
+    if password is not None:
+        params["mqtt_password"] = password
+    
+    try:
+        # Start parameter service
+        await parameter_service.start()
+        
+        # For single device
+        if device_id:
+            device = device_registry.get_device(device_id)
+            if not device:
+                console.print(f"[red]Error: Device with ID {device_id} not found[/red]")
+                return
+            
+            console.print(f"[cyan]Configuring MQTT settings for {device.name} ({device.id})...[/cyan]")
+            
+            # Apply each parameter
+            success_count = 0
+            failure_count = 0
+            
+            for param_name, param_value in params.items():
+                console.print(f"  Setting {param_name} to {param_value}...")
+                success, response = await parameter_service.set_parameter_value(
+                    device, param_name, param_value, auto_restart=(param_name == "mqtt_enable" and auto_restart)
+                )
+                
+                if success:
+                    success_count += 1
+                    console.print(f"  [green]Successfully set {param_name}[/green]")
+                else:
+                    failure_count += 1
+                    console.print(f"  [red]Failed to set {param_name}[/red]")
+            
+            # Display results
+            if success_count == len(params):
+                console.print(f"[green]Successfully configured all MQTT settings on {device.name}[/green]")
+                if auto_restart:
+                    console.print("[yellow]Note: Device may have been restarted to apply changes[/yellow]")
+            else:
+                console.print(f"[yellow]Configured {success_count}/{len(params)} MQTT settings on {device.name} with {failure_count} failures[/yellow]")
+        
+        # For group
+        elif group_name:
+            # Get group manager
+            group_manager = GroupManager()
+            
+            # Load groups
+            groups = group_manager.load_groups()
+            
+            # Check if group exists
+            if group_name not in groups:
+                console.print(f"[red]Error: Group '{group_name}' not found[/red]")
+                return
+            
+            # Get devices in group
+            device_ids = groups[group_name]
+            devices = []
+            
+            for did in device_ids:
+                device = device_registry.get_device(did)
+                if device:
+                    devices.append(device)
+            
+            if not devices:
+                console.print(f"[red]Error: No devices found in group '{group_name}'[/red]")
+                return
+            
+            console.print(f"[cyan]Configuring MQTT settings for {len(devices)} devices in group '{group_name}'...[/cyan]")
+            
+            # Overall counters
+            total_success_count = 0
+            total_failure_count = 0
+            
+            # Process each device
+            for device in devices:
+                console.print(f"[cyan]Device: {device.name} ({device.id})[/cyan]")
+                
+                # Apply each parameter
+                device_success_count = 0
+                device_failure_count = 0
+                
+                for param_name, param_value in params.items():
+                    success, response = await parameter_service.set_parameter_value(
+                        device, param_name, param_value, auto_restart=(param_name == "mqtt_enable" and auto_restart)
+                    )
+                    
+                    if success:
+                        device_success_count += 1
+                        total_success_count += 1
+                    else:
+                        device_failure_count += 1
+                        total_failure_count += 1
+                
+                # Display per-device results
+                if device_success_count == len(params):
+                    console.print(f"  [green]Successfully configured all MQTT settings[/green]")
+                else:
+                    console.print(f"  [yellow]Configured {device_success_count}/{len(params)} settings with {device_failure_count} failures[/yellow]")
+            
+            # Display overall results
+            total_params = len(params) * len(devices)
+            if total_success_count == total_params:
+                console.print(f"[green]Successfully configured all MQTT settings on all devices in group '{group_name}'[/green]")
+                if auto_restart:
+                    console.print("[yellow]Note: Devices may have been restarted to apply changes[/yellow]")
+            else:
+                console.print(f"[yellow]Configured {total_success_count}/{total_params} MQTT settings with {total_failure_count} failures[/yellow]")
+    
+    finally:
+        # Stop parameter service
+        await parameter_service.stop()
+
+
+@common_app.command("network-config")
+def set_network_configuration(
+    ctx: typer.Context,
+    static: bool = typer.Option(True, "--static/--dhcp", help="Use static IP configuration or DHCP"),
+    ip_address: Optional[str] = typer.Option(None, "--ip", help="Static IP address"),
+    gateway: Optional[str] = typer.Option(None, "--gateway", "-g", help="Gateway IP address"),
+    subnet_mask: Optional[str] = typer.Option(None, "--mask", "-m", help="Subnet mask"),
+    dns_server: Optional[str] = typer.Option(None, "--dns", "-d", help="DNS server IP address"),
+    device_id: Optional[str] = typer.Option(None, "--device", "-d", help="Device ID to set parameter on"),
+    group_name: Optional[str] = typer.Option(None, "--group", "-g", help="Set parameter on all devices in this group"),
+    auto_restart: bool = typer.Option(True, "--restart/--no-restart", help="Automatically restart devices to apply changes"),
+    debug: bool = typer.Option(False, "--debug", help="Enable debug mode"),
+):
+    """
+    Configure network settings for a device or group of devices.
+    
+    This command sets multiple network parameters in one operation.
+    Changes to network settings usually require a device restart to take effect.
+    
+    Examples:
+        - Configure static IP on a single device:
+          shelly-manager parameters common network-config --static --ip 192.168.1.100 --gateway 192.168.1.1 --device abc123
+          
+        - Set a group of devices to use DHCP:
+          shelly-manager parameters common network-config --dhcp --group office_devices
+    """
+    # Validate that static IP parameters are provided when static=True
+    if static and (not ip_address or not gateway):
+        console.print("[red]Error: When using static IP, you must provide --ip and --gateway[/red]")
+        return
+    
+    asyncio.run(_set_network_configuration_async(
+        static, ip_address, gateway, subnet_mask, dns_server, device_id, group_name, auto_restart, debug
+    ))
+
+
+async def _set_network_configuration_async(
+    static: bool,
+    ip_address: Optional[str],
+    gateway: Optional[str],
+    subnet_mask: Optional[str],
+    dns_server: Optional[str],
+    device_id: Optional[str],
+    group_name: Optional[str],
+    auto_restart: bool,
+    debug: bool
+):
+    """Set network configuration on a device or group."""
+    # Set up logging
+    configure_logging(debug=debug)
+    
+    # Check that at least one of device_id or group_name is provided
+    if not device_id and not group_name:
+        console.print("[red]Error: Either --device or --group must be specified[/red]")
+        return
+    
+    # Initialize services
+    parameter_service = ParameterService()
+    
+    # Prepare parameter dictionary
+    params = {
+        "static_ip_config": static
+    }
+    
+    # Add static IP parameters if static=True
+    if static:
+        if ip_address:
+            params["ip_address"] = ip_address
+        if gateway:
+            params["gateway"] = gateway
+        if subnet_mask:
+            params["subnet_mask"] = subnet_mask
+        if dns_server:
+            params["dns_server"] = dns_server
+    
+    try:
+        # Start parameter service
+        await parameter_service.start()
+        
+        # For single device
+        if device_id:
+            device = device_registry.get_device(device_id)
+            if not device:
+                console.print(f"[red]Error: Device with ID {device_id} not found[/red]")
+                return
+            
+            console.print(f"[cyan]Configuring network settings for {device.name} ({device.id})...[/cyan]")
+            
+            # Apply each parameter
+            success_count = 0
+            failure_count = 0
+            
+            for param_name, param_value in params.items():
+                console.print(f"  Setting {param_name} to {param_value}...")
+                success, response = await parameter_service.set_parameter_value(
+                    device, param_name, param_value, auto_restart=False  # We'll restart once at the end
+                )
+                
+                if success:
+                    success_count += 1
+                    console.print(f"  [green]Successfully set {param_name}[/green]")
+                else:
+                    failure_count += 1
+                    console.print(f"  [red]Failed to set {param_name}[/red]")
+            
+            # Display results
+            if success_count == len(params):
+                console.print(f"[green]Successfully configured all network settings on {device.name}[/green]")
+                
+                # Restart the device if needed
+                if auto_restart:
+                    console.print(f"[yellow]Restarting device {device.name} to apply network changes...[/yellow]")
+                    restart_success = await parameter_service._restart_device(device)
+                    if restart_success:
+                        console.print(f"[green]Successfully restarted device {device.name}[/green]")
+                        console.print(f"[yellow]Note: The device IP address may have changed. You may need to discover it again.[/yellow]")
+                    else:
+                        console.print(f"[red]Failed to restart device {device.name}[/red]")
+            else:
+                console.print(f"[yellow]Configured {success_count}/{len(params)} network settings on {device.name} with {failure_count} failures[/yellow]")
+        
+        # For group
+        elif group_name:
+            # Get group manager
+            group_manager = GroupManager()
+            
+            # Load groups
+            groups = group_manager.load_groups()
+            
+            # Check if group exists
+            if group_name not in groups:
+                console.print(f"[red]Error: Group '{group_name}' not found[/red]")
+                return
+            
+            # Get devices in group
+            device_ids = groups[group_name]
+            devices = []
+            
+            for did in device_ids:
+                device = device_registry.get_device(did)
+                if device:
+                    devices.append(device)
+            
+            if not devices:
+                console.print(f"[red]Error: No devices found in group '{group_name}'[/red]")
+                return
+            
+            console.print(f"[cyan]Configuring network settings for {len(devices)} devices in group '{group_name}'...[/cyan]")
+            console.print("[yellow]Warning: Changing network settings for multiple devices at once may make them unreachable![/yellow]")
+            console.print("[yellow]Consider applying these changes to one device at a time instead.[/yellow]")
+            
+            # Confirm before proceeding
+            confirm = typer.confirm("Do you want to continue?")
+            if not confirm:
+                console.print("Operation cancelled.")
+                return
+            
+            # Overall counters
+            total_success_count = 0
+            total_failure_count = 0
+            restart_success_count = 0
+            restart_failure_count = 0
+            
+            # Process each device
+            for device in devices:
+                console.print(f"[cyan]Device: {device.name} ({device.id})[/cyan]")
+                
+                # Apply each parameter
+                device_success_count = 0
+                device_failure_count = 0
+                
+                for param_name, param_value in params.items():
+                    success, response = await parameter_service.set_parameter_value(
+                        device, param_name, param_value, auto_restart=False  # We'll restart once at the end
+                    )
+                    
+                    if success:
+                        device_success_count += 1
+                        total_success_count += 1
+                    else:
+                        device_failure_count += 1
+                        total_failure_count += 1
+                
+                # Display per-device results
+                if device_success_count == len(params):
+                    console.print(f"  [green]Successfully configured all network settings[/green]")
+                    
+                    # Restart the device if needed
+                    if auto_restart:
+                        console.print(f"  [yellow]Restarting device {device.name} to apply network changes...[/yellow]")
+                        restart_success = await parameter_service._restart_device(device)
+                        if restart_success:
+                            restart_success_count += 1
+                            console.print(f"  [green]Successfully restarted device[/green]")
+                        else:
+                            restart_failure_count += 1
+                            console.print(f"  [red]Failed to restart device[/red]")
+                else:
+                    console.print(f"  [yellow]Configured {device_success_count}/{len(params)} settings with {device_failure_count} failures[/yellow]")
+            
+            # Display overall results
+            total_params = len(params) * len(devices)
+            if total_success_count == total_params:
+                console.print(f"[green]Successfully configured all network settings on all devices in group '{group_name}'[/green]")
+                
+                if auto_restart:
+                    if restart_success_count == len(devices):
+                        console.print(f"[green]Successfully restarted all devices[/green]")
+                    else:
+                        console.print(f"[yellow]Restarted {restart_success_count}/{len(devices)} devices with {restart_failure_count} failures[/yellow]")
+                    
+                    console.print(f"[yellow]Note: The device IP addresses may have changed. You may need to discover them again.[/yellow]")
+            else:
+                console.print(f"[yellow]Configured {total_success_count}/{total_params} network settings with {total_failure_count} failures[/yellow]")
+    
+    finally:
+        # Stop parameter service
+        await parameter_service.stop()
+
+
+@common_app.command("cloud")
+def set_cloud_enabled(
+    ctx: typer.Context,
+    enable: bool = typer.Argument(..., help="Enable (true) or disable (false) Shelly Cloud connectivity"),
+    device_id: Optional[str] = typer.Option(None, "--device", "-d", help="Device ID to set parameter on"),
+    group_name: Optional[str] = typer.Option(None, "--group", "-g", help="Set parameter on all devices in this group"),
+    auto_restart: bool = typer.Option(False, "--restart", "-r", help="Automatically restart devices if required"),
+    debug: bool = typer.Option(False, "--debug", help="Enable debug mode")
+):
+    """
+    Enable or disable Shelly Cloud connectivity.
+    
+    This command controls whether devices connect to the Shelly Cloud service.
+    Disabling cloud connectivity can improve privacy and reduce network traffic.
+    
+    Examples:
+        - Disable cloud connectivity for a single device:
+          shelly-manager parameters common cloud false --device abc123
+          
+        - Enable cloud connectivity for a group:
+          shelly-manager parameters common cloud true --group living_room
+    """
+    # Run the async function
+    asyncio.run(_set_parameter_async("cloud_enable", str(enable), device_id, group_name, auto_restart, debug)) 

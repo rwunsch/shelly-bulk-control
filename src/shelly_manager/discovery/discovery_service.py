@@ -931,7 +931,7 @@ class DiscoveryService:
         max_retries = retries
         retry_delay = 1  # seconds
         
-        logger.debug(f"Probing {ip} for Shelly device")
+        logger.info(f"Probing {ip} for Shelly device")
         
         # First try the /shelly endpoint (works for all devices)
         device = await self._probe_shelly_endpoint(ip, max_retries, retry_delay)
@@ -953,52 +953,27 @@ class DiscoveryService:
                 else:  # Gen2+ devices
                     logger.debug(f"Detected Gen2/Gen3 device at {ip}, getting device info")
                     
-                    # CRITICAL CHECK: Check for known model/version combinations
-                    if device.model == "SNSW-001P8EU" and device.firmware_version == "1.3.3":
-                        logger.info(f"CRITICAL: Found Mini1PM with firmware 1.3.3 which needs update to 1.4.4")
-                        device.has_update = True
-                    else:
-                        # First try GetDeviceInfo (more comprehensive)
-                        success = await self._get_gen2_device_info(ip, device)
-                        if not success:
-                            # Fall back to GetConfig if GetDeviceInfo fails
-                            logger.debug(f"GetDeviceInfo failed for {ip}, trying GetConfig")
-                            device = await self._get_gen2_config(ip, device)
+                    # First try GetDeviceInfo (more comprehensive)
+                    success = await self._get_gen2_device_info(ip, device)
+                    if not success:
+                        # Fall back to GetConfig if GetDeviceInfo fails
+                        logger.debug(f"GetDeviceInfo failed for {ip}, trying GetConfig")
+                        device = await self._get_gen2_config(ip, device)
                         
-                    # Final check for special cases
-                    if device.model == "SNSW-001P8EU" and device.firmware_version == "1.3.3":
-                        logger.warning(f"FINAL CHECK: Device {device.id} ({ip}) has known outdated firmware version: {device.firmware_version}, needs update to 1.4.4")
-                        device.has_update = True
+                    # Check for eco mode
+                    await self._check_gen2_status_for_eco_mode(ip, device)
+                    
+                    # If eco mode not found in status, check config
+                    if device.eco_mode_enabled is None:
+                        await self._check_gen2_config_for_eco_mode(ip, device)
 
-                # DIRECT ECO MODE DETECTION
-                logger.debug(f"Checking eco mode settings directly for {ip}")
-                await self._check_gen2_config_for_eco_mode(ip, device)
-                
-                # Get configuration directly
-                if "001p8" in device.model.lower():  # Plus1PMMini
-                    logger.info(f"Checking configuration directly for Mini1PM device {ip}")
-                    # Make direct call to GetConfig to check eco_mode
-                    url = f"http://{ip}/rpc/Shelly.GetConfig"
-                    logger.debug(f"Calling GetConfig at {url}")
-                    try:
-                        async with self._session.post(url, json={}, timeout=8) as response:
-                            if response.status == 200:
-                                data = await response.json()
-                                logger.debug(f"GetConfig response for {ip}: {data}")
-                                if "sys" in data and "device" in data["sys"] and "eco_mode" in data["sys"]["device"]:
-                                    eco_mode = bool(data["sys"]["device"]["eco_mode"])
-                                    logger.debug(f"*** FOUND ECO MODE in sys.device.eco_mode: {eco_mode} ***")
-                                    device.eco_mode_enabled = eco_mode
-                    except Exception as e:
-                        logger.error(f"Error in direct GetConfig call: {e}")
-                
                 # Make sure eco_mode_enabled is set to a boolean value
                 if not hasattr(device, 'eco_mode_enabled') or device.eco_mode_enabled is None:
-                    logger.debug("Eco mode not detected, setting to False")
+                    logger.info(f"Eco mode not detected for {ip}, setting to False")
                     device.eco_mode_enabled = False
                 else:
-                    logger.debug(f"Final eco mode setting: {device.eco_mode_enabled}")
-                
+                    logger.info(f"Final eco mode setting for {ip}: {device.eco_mode_enabled}")
+
                 # Log the discovered device
                 logger.debug(f"Discovered device via {device.discovery_method}: {device.id} ({ip})")
                 logger.debug(f"  Name: {device.name}")
@@ -1006,8 +981,6 @@ class DiscoveryService:
                 logger.debug(f"  Model: {device.model}")
                 logger.debug(f"  Generation: {device.generation.value}")
                 logger.debug(f"  Firmware: {device.firmware_version}")
-                logger.debug(f"  IP: {device.ip_address}")
-                logger.debug(f"  MAC: {device.mac_address}")
                 logger.debug(f"  Updates: {device.has_update}")
                 logger.debug(f"  Eco Mode: {device.eco_mode_enabled}")
                 
@@ -1017,7 +990,7 @@ class DiscoveryService:
                 # Return the basic device info even if additional info failed
                 return device
         
-        logger.info(f"No Shelly device found at {ip}")
+        logger.debug(f"No Shelly device found at {ip}")
         return None
         
     async def _probe_shelly_endpoint(self, ip: str, max_retries: int = 1, retry_delay: int = 1) -> Optional[Device]:
@@ -1077,20 +1050,8 @@ class DiscoveryService:
                         device.firmware_version = data["fw_version"]
                         logger.debug(f"Device firmware version: {device.firmware_version}")
                     
-                    # SPECIAL CASE: Directly handle known firmware versions
-                    if device.model == "SNSW-001P8EU" and device.firmware_version == "1.3.3":
-                        logger.info(f"DETECTED OUTDATED FIRMWARE: {device.model} with {device.firmware_version} should update to 1.4.4")
-                        device.has_update = True
-                    else:
-                        # Normal update check
-                        await self._check_gen2_update_status(ip, device)
-                    
-                    # Check for eco mode
-                    await self._check_gen2_status_for_eco_mode(ip, device)
-                    
-                    # If eco mode not found in status, check config
-                    if device.eco_mode_enabled is None:
-                        await self._check_gen2_config_for_eco_mode(ip, device)
+                    # Check for updates
+                    await self._check_gen2_update_status(ip, device)
                     
                     logger.debug(f"Final device info: {device.id} ({ip}), "
                                f"Type: {device.model}, FW: {device.firmware_version}, "
@@ -1110,6 +1071,18 @@ class DiscoveryService:
             return
             
         try:
+            # Known outdated firmware versions - these should eventually come from device_types.yaml
+            known_outdated_firmware = {
+                "SNSW-001P8EU": {"version": "1.3.3", "update_to": "1.4.4"}
+            }
+            
+            # Check for known outdated firmware first
+            if device.model in known_outdated_firmware and device.firmware_version == known_outdated_firmware[device.model]["version"]:
+                update_to = known_outdated_firmware[device.model]["update_to"]
+                logger.info(f"Known outdated firmware detected for {device.model}: {device.firmware_version} -> {update_to}")
+                device.has_update = True
+                return
+                
             url = f"http://{ip}/rpc/Shelly.GetStatus"
             logger.debug(f"Checking update status from {url}")
             
@@ -1158,12 +1131,6 @@ class DiscoveryService:
                         has_update = bool(data["cloud"]["new_fw"])
                         logger.debug(f"Update status from cloud.new_fw: {has_update}")
                         device.has_update = has_update
-                        return
-                        
-                    # SPECIAL CASE: Check for known model+version combinations that need updates
-                    if device.model == "SNSW-001P8EU" and device.firmware_version == "1.3.3":
-                        logger.info(f"Known outdated firmware detected for {device.model}: {device.firmware_version} -> 1.4.4")
-                        device.has_update = True
                         return
                         
                     # No update sources found

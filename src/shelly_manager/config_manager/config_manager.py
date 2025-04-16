@@ -97,53 +97,247 @@ class ConfigManager:
                     if key not in before_settings and '.' not in key:
                         logger.warning(f"Key '{key}' not found in current settings for {device.id}. May not be supported.")
                 
-                url = f"http://{device.ip_address}/settings"
-                logger.debug(f"Sending POST request to Gen1 endpoint: {url}")
-                logger.debug(f"Raw request data: {json.dumps(processed_settings)}")
+                # Try different approaches for GEN1 devices
+                success = False
                 
-                try:
-                    async with self._session.post(url, json=processed_settings) as response:
-                        status_code = response.status
-                        logger.debug(f"Response status: {status_code}")
+                # Approach 1: Standard settings endpoint with POST
+                if not success:
+                    try:
+                        url = f"http://{device.ip_address}/settings"
+                        logger.debug(f"Trying Gen1 approach 1: POST to {url}")
+                        logger.debug(f"Request data: {json.dumps(processed_settings)}")
                         
-                        response_text = await response.text()
-                        logger.debug(f"Gen1 device response text: {response_text}")
+                        async with self._session.post(url, json=processed_settings) as response:
+                            response_text = await response.text()
+                            logger.debug(f"Response status: {response.status}")
+                            logger.debug(f"Response text: {response_text}")
+                            
+                            if response.status == 200:
+                                # We need to check if the change is actually reflected
+                                # in the API response, as some devices return 200 even if they
+                                # don't apply the change
+                                
+                                # Wait to ensure settings are applied
+                                await asyncio.sleep(2)
+                                
+                                # Get settings after to verify
+                                after_check = await self.get_device_settings(device)
+                                
+                                # Check if settings actually changed
+                                if "name" in processed_settings and "name" in after_check:
+                                    if after_check["name"] == processed_settings["name"]:
+                                        logger.debug("Name change verified in approach 1")
+                                        success = True
+                                    else:
+                                        logger.debug(f"Name not changed in response. Expected: {processed_settings['name']}, Got: {after_check['name']}")
+                                else:
+                                    success = True  # Assume success for other settings
+                            else:
+                                logger.debug(f"POST to settings endpoint failed: {response.status}")
+                    except Exception as e:
+                        logger.debug(f"Approach 1 failed: {str(e)}")
+                
+                # Approach 2: Settings/name endpoint
+                if not success and "name" in processed_settings:
+                    try:
+                        name_value = processed_settings["name"]
+                        url = f"http://{device.ip_address}/settings/name?name={name_value}"
+                        logger.debug(f"Trying Gen1 approach 2: GET to {url}")
                         
-                        try:
-                            response.raise_for_status()
-                        except aiohttp.ClientResponseError as e:
-                            logger.error(f"HTTP error from Gen1 device: {e.status} - {e.message}")
-                            logger.error(f"Response body: {response_text}")
-                            return False
+                        async with self._session.get(url) as response:
+                            response_text = await response.text()
+                            logger.debug(f"Response status: {response.status}")
+                            logger.debug(f"Response text: {response_text}")
+                            
+                            if response.status == 200:
+                                success = True
+                                logger.debug("Name change succeeded using direct settings/name endpoint")
+                            else:
+                                logger.debug(f"Direct name endpoint failed: {response.status}")
+                    except Exception as e:
+                        logger.debug(f"Approach 2 failed: {str(e)}")
+                
+                # Approach 2b: URL-encoded name using settings endpoint
+                if not success and "name" in processed_settings:
+                    try:
+                        import urllib.parse
+                        name_value = urllib.parse.quote(processed_settings["name"])
+                        url = f"http://{device.ip_address}/settings?name={name_value}"
+                        logger.debug(f"Trying Gen1 approach 2b: GET to {url} with URL-encoded name")
                         
-                        logger.debug(f"Settings sent successfully to Gen1 device {device.id}")
+                        async with self._session.get(url) as response:
+                            response_text = await response.text()
+                            logger.debug(f"Response status: {response.status}")
+                            logger.debug(f"Response text: {response_text}")
+                            
+                            if response.status == 200:
+                                # Wait a bit and check if it actually changed
+                                await asyncio.sleep(2)
+                                check_settings = await self.get_device_settings(device)
+                                if check_settings.get("name") == processed_settings["name"]:
+                                    success = True
+                                    logger.debug("Name change succeeded using URL-encoded GET")
+                                else:
+                                    logger.debug(f"Name not changed. Got: {check_settings.get('name')}")
+                            else:
+                                logger.debug(f"URL-encoded name endpoint failed: {response.status}")
+                    except Exception as e:
+                        logger.debug(f"Approach 2b failed: {str(e)}")
+                
+                # Approach 3: Form-encoded POST
+                if not success:
+                    try:
+                        url = f"http://{device.ip_address}/settings"
+                        # Convert to form encoded data
+                        form_data = aiohttp.FormData()
+                        for key, value in processed_settings.items():
+                            form_data.add_field(key, str(value))
+                            
+                        logger.debug(f"Trying Gen1 approach 3: Form POST to {url}")
                         
-                        # Wait a moment for the device to apply settings
-                        logger.debug(f"Waiting for Gen1 device {device.id} to apply settings...")
-                        await asyncio.sleep(2)
+                        async with self._session.post(url, data=form_data) as response:
+                            response_text = await response.text()
+                            logger.debug(f"Response status: {response.status}")
+                            logger.debug(f"Response text: {response_text}")
+                            
+                            if response.status == 200:
+                                success = True
+                                logger.debug("Settings change succeeded using form-encoded POST")
+                            else:
+                                logger.debug(f"Form-encoded POST failed: {response.status}")
+                    except Exception as e:
+                        logger.debug(f"Approach 3 failed: {str(e)}")
+                
+                # Approach 4: Using settings/relay/0 endpoint specifically for relays
+                if not success and any(key.startswith("relay") for key in processed_settings.keys()):
+                    try:
+                        # Extract relay settings
+                        relay_settings = {key: value for key, value in processed_settings.items() 
+                                        if key.startswith("relay")}
                         
-                        # Get settings after change
-                        logger.debug(f"Getting settings after change for {device.id}")
-                        after_settings = await self.get_device_settings(device)
+                        url = f"http://{device.ip_address}/settings/relay/0"
+                        logger.debug(f"Trying Gen1 approach 4: POST to {url} for relay settings")
+                        logger.debug(f"Request data: {json.dumps(relay_settings)}")
                         
-                        if not after_settings:
-                            logger.error(f"Failed to get settings after change for {device.id}")
-                            return False
+                        async with self._session.post(url, json=relay_settings) as response:
+                            response_text = await response.text()
+                            logger.debug(f"Response status: {response.status}")
+                            logger.debug(f"Response text: {response_text}")
+                            
+                            if response.status == 200:
+                                success = True
+                                logger.debug("Relay settings change succeeded")
+                    except Exception as e:
+                        logger.debug(f"Approach 4 failed: {str(e)}")
+                
+                # Approach 5: Direct parameter update via query string
+                if not success:
+                    try:
+                        # Build query string with all parameters
+                        params = []
+                        for key, value in processed_settings.items():
+                            # Convert boolean values to on/off strings for query params
+                            if isinstance(value, bool):
+                                value = "on" if value else "off"
+                            params.append(f"{key}={value}")
                         
-                        # Verify changes
-                        logger.debug(f"Verifying settings changes for {device.id}")
-                        verified = self._verify_gen1_settings_changed(processed_settings, before_settings, after_settings)
+                        query_str = "&".join(params)
+                        url = f"http://{device.ip_address}/settings?{query_str}"
+                        logger.debug(f"Trying Gen1 approach 5: GET with parameters to {url}")
                         
-                        if verified:
-                            logger.info(f"Settings successfully verified for Gen1 device {device.id}")
-                        else:
-                            logger.warning(f"Some settings may not have been applied correctly for Gen1 device {device.id}")
+                        async with self._session.get(url) as response:
+                            response_text = await response.text()
+                            logger.debug(f"Response status: {response.status}")
+                            logger.debug(f"Response text: {response_text}")
+                            
+                            if response.status == 200:
+                                success = True
+                                logger.debug("Settings change succeeded using direct parameter GET")
+                            else:
+                                logger.debug(f"Direct parameter GET failed: {response.status}")
+                    except Exception as e:
+                        logger.debug(f"Approach 5 failed: {str(e)}")
+                
+                # Approach 6: Settings update with save flag
+                if not success:
+                    try:
+                        url = f"http://{device.ip_address}/settings"
+                        # Add save flag to the settings
+                        save_settings = processed_settings.copy()
+                        save_settings["save"] = True
                         
-                        return verified
-                except aiohttp.ClientConnectionError as e:
-                    logger.error(f"Connection error to Gen1 device {device.id} at {device.ip_address}: {str(e)}")
+                        logger.debug(f"Trying Gen1 approach 6: POST to {url} with save flag")
+                        logger.debug(f"Request data: {json.dumps(save_settings)}")
+                        
+                        async with self._session.post(url, json=save_settings) as response:
+                            response_text = await response.text()
+                            logger.debug(f"Response status: {response.status}")
+                            logger.debug(f"Response text: {response_text}")
+                            
+                            if response.status == 200:
+                                success = True
+                                logger.debug("Settings change with save flag succeeded")
+                            else:
+                                logger.debug(f"Settings with save flag failed: {response.status}")
+                    except Exception as e:
+                        logger.debug(f"Approach 6 failed: {str(e)}")
+                
+                # If none of the approaches worked, try a save/reboot combination
+                if not success:
+                    try:
+                        # First try to save
+                        url = f"http://{device.ip_address}/settings?save=1"
+                        logger.debug(f"Trying Gen1 final approach: GET to {url} to save settings")
+                        
+                        async with self._session.get(url) as response:
+                            response_text = await response.text()
+                            logger.debug(f"Response status: {response.status}")
+                            logger.debug(f"Response text: {response_text}")
+                            
+                            if response.status == 200:
+                                logger.debug("Save command succeeded")
+                                
+                                # Wait a moment for save to complete
+                                await asyncio.sleep(2)
+                                
+                                # Check if settings were saved
+                                after_save = await self.get_device_settings(device)
+                                
+                                if "name" in processed_settings and "name" in after_save:
+                                    if after_save["name"] == processed_settings["name"]:
+                                        logger.debug("Name change verified after save")
+                                        success = True
+                            else:
+                                logger.debug(f"Save command failed: {response.status}")
+                    except Exception as e:
+                        logger.debug(f"Final approach failed: {str(e)}")
+                
+                if not success:
+                    logger.error(f"Failed to apply settings to GEN1 device {device.id} - all approaches failed")
                     return False
-                    
+                
+                # Wait a moment for the device to apply settings
+                logger.debug(f"Waiting for Gen1 device {device.id} to apply settings...")
+                await asyncio.sleep(2)
+                
+                # Get settings after change
+                logger.debug(f"Getting settings after change for {device.id}")
+                after_settings = await self.get_device_settings(device)
+                
+                if not after_settings:
+                    logger.error(f"Failed to get settings after change for {device.id}")
+                    return False
+                
+                # Verify changes
+                logger.debug(f"Verifying settings changes for {device.id}")
+                verified = self._verify_gen1_settings_changed(processed_settings, before_settings, after_settings)
+                
+                if verified:
+                    logger.info(f"Settings successfully verified for Gen1 device {device.id}")
+                else:
+                    logger.warning(f"Some settings may not have been applied correctly for Gen1 device {device.id}")
+                
+                return verified
             else:  # GEN2
                 # Get current config structure
                 logger.debug(f"Current Gen2 config structure: {list(before_settings.keys())}")

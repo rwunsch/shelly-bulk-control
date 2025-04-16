@@ -271,9 +271,9 @@ def check_updates(
     operate_group(group_name=group_name, action="check_updates", parameters=None, debug=debug)
 
 
-@app.command("update")
-def apply_updates(
-    group_name: str = typer.Argument(..., help="Name of the group to update"),
+@app.command("update-firmware")
+def apply_firmware_updates(
+    group_name: str = typer.Argument(..., help="Name of the group to update firmware for"),
     all_devices: bool = typer.Option(False, "--all", help="Update all devices, not just those with available updates"),
     debug: bool = typer.Option(False, "--debug", help="Enable debug logging")
 ):

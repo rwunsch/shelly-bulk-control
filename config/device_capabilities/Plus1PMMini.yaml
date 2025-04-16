@@ -79,9 +79,9 @@ apis:
         factory_reset: boolean
       mqtt:
         enable: boolean
-        server: string
+        server: 'null'
         client_id: string
-        user: string
+        user: 'null'
         ssl_ca: 'null'
         topic_prefix: string
         rpc_ntf: boolean
@@ -156,7 +156,7 @@ apis:
           interval: '...'
       ws:
         enable: boolean
-        server: string
+        server: 'null'
         ssl_ca: string
   Sys.GetStatus:
     description: 'Gen2/Gen3 RPC method: Sys.GetStatus'
@@ -185,7 +185,7 @@ apis:
     description: 'Gen2/Gen3 RPC method: Sys.GetConfig'
     response_structure:
       device:
-        name: string
+        name: 'null'
         mac: string
         fw_id: string
         discoverable: boolean
@@ -223,9 +223,9 @@ apis:
     description: 'Gen2/Gen3 RPC method: MQTT.GetConfig'
     response_structure:
       enable: boolean
-      server: string
+      server: 'null'
       client_id: string
-      user: string
+      user: 'null'
       ssl_ca: 'null'
       topic_prefix: string
       rpc_ntf: boolean
@@ -361,7 +361,7 @@ parameters:
     component: shelly
     read_only: false
   shelly_mqtt_server:
-    type: string
+    type: 'null'
     description: Shelly mqtt.server
     api: Shelly.SetConfig
     parameter_path: mqtt.server
@@ -375,7 +375,7 @@ parameters:
     component: shelly
     read_only: false
   shelly_mqtt_user:
-    type: string
+    type: 'null'
     description: Shelly mqtt.user
     api: Shelly.SetConfig
     parameter_path: mqtt.user
@@ -522,7 +522,7 @@ parameters:
     component: shelly
     read_only: false
   shelly_sys_device_name:
-    type: string
+    type: 'null'
     description: Shelly sys.device.name
     api: Shelly.SetConfig
     parameter_path: sys.device.name
@@ -802,7 +802,7 @@ parameters:
     component: shelly
     read_only: false
   shelly_ws_server:
-    type: string
+    type: 'null'
     description: Shelly ws.server
     api: Shelly.SetConfig
     parameter_path: ws.server
@@ -816,7 +816,7 @@ parameters:
     component: shelly
     read_only: false
   sys_device_name:
-    type: string
+    type: 'null'
     description: Sys device.name
     api: Sys.SetConfig
     parameter_path: device.name
@@ -956,7 +956,7 @@ parameters:
     component: mqtt
     read_only: false
   user:
-    type: string
+    type: 'null'
     description: Mqtt user
     api: MQTT.SetConfig
     parameter_path: user

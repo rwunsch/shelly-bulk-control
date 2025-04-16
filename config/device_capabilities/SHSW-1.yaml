@@ -554,55 +554,6 @@ apis:
       power: float
       schedule: boolean
       schedule_rules: []
-  status/meters/0:
-    description: 'Gen1 API endpoint: status/meters/0'
-    response_structure:
-      wifi_sta:
-        connected: boolean
-        ssid: string
-        ip: string
-        rssi: integer
-      cloud:
-        enabled: boolean
-        connected: boolean
-      mqtt:
-        connected: boolean
-      time: string
-      unixtime: integer
-      serial: integer
-      has_update: boolean
-      mac: string
-      cfg_changed_cnt: integer
-      actions_stats:
-        skipped: integer
-      relays:
-      - ison: '...'
-        has_timer: '...'
-        timer_started: '...'
-        timer_duration: '...'
-        timer_remaining: '...'
-        source: '...'
-      meters:
-      - power: '...'
-        is_valid: '...'
-      inputs:
-      - input: '...'
-        event: '...'
-        event_cnt: '...'
-      ext_sensors: {}
-      ext_temperature: {}
-      ext_humidity: {}
-      update:
-        status: string
-        has_update: boolean
-        new_version: string
-        old_version: string
-        beta_version: string
-      ram_total: integer
-      ram_free: integer
-      fs_size: integer
-      fs_free: integer
-      uptime: integer
   settings/cloud:
     description: 'Gen1 API endpoint: settings/cloud'
     response_structure:

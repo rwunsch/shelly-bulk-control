@@ -75,7 +75,7 @@ apis:
         server: string
       cover:0:
         id: integer
-        name: string
+        name: 'null'
         motor:
           idle_power_thr: '...'
           idle_confirm_period: '...'
@@ -145,8 +145,7 @@ apis:
           mqtt: '...'
           websocket: '...'
           udp: '...'
-        ui_data:
-          cover: '...'
+        ui_data: {}
         rpc_udp:
           dst_addr: '...'
           listen_port: '...'
@@ -182,7 +181,7 @@ apis:
           interval: '...'
       ws:
         enable: boolean
-        server: string
+        server: 'null'
         ssl_ca: string
   Sys.GetStatus:
     description: 'Gen2/Gen3 RPC method: Sys.GetStatus'
@@ -210,7 +209,7 @@ apis:
     description: 'Gen2/Gen3 RPC method: Sys.GetConfig'
     response_structure:
       device:
-        name: string
+        name: 'null'
         mac: string
         fw_id: string
         discoverable: boolean
@@ -230,8 +229,7 @@ apis:
           enable: '...'
         udp:
           addr: '...'
-      ui_data:
-        cover: string
+      ui_data: {}
       rpc_udp:
         dst_addr: 'null'
         listen_port: 'null'
@@ -356,7 +354,7 @@ parameters:
     component: shelly
     read_only: false
   shelly_cover:0_name:
-    type: string
+    type: 'null'
     description: Shelly cover:0.name
     api: Shelly.SetConfig
     parameter_path: cover:0.name
@@ -671,7 +669,7 @@ parameters:
     component: shelly
     read_only: false
   shelly_sys_device_name:
-    type: string
+    type: 'null'
     description: Shelly sys.device.name
     api: Shelly.SetConfig
     parameter_path: sys.device.name
@@ -773,13 +771,6 @@ parameters:
     description: Shelly sys.debug.udp.addr
     api: Shelly.SetConfig
     parameter_path: sys.debug.udp.addr
-    component: shelly
-    read_only: false
-  shelly_sys_ui_data_cover:
-    type: string
-    description: Shelly sys.ui_data.cover
-    api: Shelly.SetConfig
-    parameter_path: sys.ui_data.cover
     component: shelly
     read_only: false
   shelly_sys_rpc_udp_dst_addr:
@@ -972,7 +963,7 @@ parameters:
     component: shelly
     read_only: false
   shelly_ws_server:
-    type: string
+    type: 'null'
     description: Shelly ws.server
     api: Shelly.SetConfig
     parameter_path: ws.server
@@ -986,7 +977,7 @@ parameters:
     component: shelly
     read_only: false
   sys_device_name:
-    type: string
+    type: 'null'
     description: Sys device.name
     api: Sys.SetConfig
     parameter_path: device.name
@@ -1088,13 +1079,6 @@ parameters:
     description: Sys debug.udp.addr
     api: Sys.SetConfig
     parameter_path: debug.udp.addr
-    component: sys
-    read_only: false
-  sys_ui_data_cover:
-    type: string
-    description: Sys ui_data.cover
-    api: Sys.SetConfig
-    parameter_path: ui_data.cover
     component: sys
     read_only: false
   sys_rpc_udp_dst_addr:

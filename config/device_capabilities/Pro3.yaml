@@ -1,6 +1,6 @@
 device_type: Pro3
 id: Pro3
-name: Unknown Device
+name: Shelly Pro 3
 generation: devicegeneration.gen2
 apis:
   Shelly.GetStatus:

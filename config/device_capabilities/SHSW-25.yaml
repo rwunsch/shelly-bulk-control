@@ -1,6 +1,6 @@
 device_type: SHSW-25
 id: SHSW-25
-name: Unknown Device
+name: Shelly 2.5
 generation: devicegeneration.gen1
 apis:
   settings:

@@ -1,6 +1,6 @@
 device_type: Mini1G3
 id: Mini1G3
-name: Shelly Mini 1 Gen3
+name: Unknown Device
 generation: devicegeneration.gen3
 apis:
   Shelly.GetStatus:

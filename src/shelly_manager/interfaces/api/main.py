@@ -272,7 +272,78 @@ async def perform_device_operation(device_id: str, operation_request: OperationR
 @app.get("/groups", response_model=List[GroupModel])
 async def get_groups():
     """Get all device groups"""
-    return group_manager.get_all_groups()
+    groups = group_manager.get_all_groups()
+    result = []
+    
+    for group in groups:
+        # Log complete group data structure
+        logger.debug(f"Group data structure: {repr(group)}")
+        
+        try:
+            # Check if this is a dictionary or DeviceGroup object
+            if isinstance(group, dict):
+                # Handle dictionary response
+                name = group.get("name", "")
+                device_ids = group.get("device_ids", [])
+                description = group.get("description", None)
+                
+                # Print types for debugging
+                logger.debug(f"Dict type: name={type(name)}, device_ids={type(device_ids)}, description={type(description)}")
+                logger.debug(f"Dict values: name={name}, device_ids={device_ids}, description={description}")
+                
+                # Ensure correct types
+                if not isinstance(device_ids, list):
+                    logger.warning(f"device_ids is not a list for group {name}, converting: {device_ids}")
+                    # It appears device_ids might be swapped with description
+                    if isinstance(description, list):
+                        logger.warning(f"Description is a list for group {name}, swapping with device_ids")
+                        temp = device_ids
+                        device_ids = description
+                        description = temp
+                    else:
+                        device_ids = []
+                
+                if not isinstance(description, str) and description is not None:
+                    logger.warning(f"description is not a string for group {name}, converting: {description}")
+                    description = str(description) if description else None
+            else:
+                # Handle DeviceGroup object - access attributes safely
+                name = getattr(group, "name", "")
+                device_ids = getattr(group, "device_ids", [])
+                description = getattr(group, "description", None)
+                
+                # Print types for debugging
+                logger.debug(f"Object type: name={type(name)}, device_ids={type(device_ids)}, description={type(description)}")
+                logger.debug(f"Object values: name={name}, device_ids={device_ids}, description={description}")
+                
+                # Ensure correct types
+                if not isinstance(device_ids, list):
+                    logger.warning(f"device_ids is not a list for group {name}, converting: {device_ids}")
+                    # It appears device_ids might be swapped with description
+                    if isinstance(description, list):
+                        logger.warning(f"Description is a list for group {name}, swapping with device_ids")
+                        temp = device_ids
+                        device_ids = description
+                        description = temp
+                    else:
+                        device_ids = []
+                
+                if not isinstance(description, str) and description is not None:
+                    logger.warning(f"description is not a string for group {name}, converting: {description}")
+                    description = str(description) if description else None
+            
+            # Create the model with verified types
+            group_model = GroupModel(
+                name=name,
+                device_ids=device_ids,
+                description=description
+            )
+            result.append(group_model)
+            logger.debug(f"Successfully created GroupModel for {name}")
+        except Exception as e:
+            logger.error(f"Error processing group {getattr(group, 'name', repr(group))}: {str(e)}")
+    
+    return result
 
 @app.post("/groups", response_model=GroupModel)
 async def create_group(group: GroupModel):
@@ -306,7 +377,72 @@ async def get_group(group_name: str):
     group = group_manager.get_group(group_name)
     if not group:
         raise HTTPException(status_code=404, detail=f"Group '{group_name}' not found")
-    return group
+    
+    # Log complete group data structure for debugging
+    logger.debug(f"Group data for {group_name}: {repr(group)}")
+    
+    try:
+        # Check if this is a dictionary or DeviceGroup object
+        if isinstance(group, dict):
+            # Handle dictionary response
+            name = group.get("name", group_name)
+            device_ids = group.get("device_ids", [])
+            description = group.get("description", None)
+            
+            # Print types for debugging
+            logger.debug(f"Dict type: name={type(name)}, device_ids={type(device_ids)}, description={type(description)}")
+            logger.debug(f"Dict values: name={name}, device_ids={device_ids}, description={description}")
+            
+            # Ensure correct types
+            if not isinstance(device_ids, list):
+                logger.warning(f"device_ids is not a list for group {name}, converting: {device_ids}")
+                # It appears device_ids might be swapped with description
+                if isinstance(description, list):
+                    logger.warning(f"Description is a list for group {name}, swapping with device_ids")
+                    temp = device_ids
+                    device_ids = description
+                    description = temp
+                else:
+                    device_ids = []
+            
+            if not isinstance(description, str) and description is not None:
+                logger.warning(f"description is not a string for group {name}, converting: {description}")
+                description = str(description) if description else None
+        else:
+            # Handle DeviceGroup object - access attributes safely
+            name = getattr(group, "name", group_name)
+            device_ids = getattr(group, "device_ids", [])
+            description = getattr(group, "description", None)
+            
+            # Print types for debugging
+            logger.debug(f"Object type: name={type(name)}, device_ids={type(device_ids)}, description={type(description)}")
+            logger.debug(f"Object values: name={name}, device_ids={device_ids}, description={description}")
+            
+            # Ensure correct types
+            if not isinstance(device_ids, list):
+                logger.warning(f"device_ids is not a list for group {name}, converting: {device_ids}")
+                # It appears device_ids might be swapped with description
+                if isinstance(description, list):
+                    logger.warning(f"Description is a list for group {name}, swapping with device_ids")
+                    temp = device_ids
+                    device_ids = description
+                    description = temp
+                else:
+                    device_ids = []
+            
+            if not isinstance(description, str) and description is not None:
+                logger.warning(f"description is not a string for group {name}, converting: {description}")
+                description = str(description) if description else None
+        
+        # Create the model with verified types
+        return GroupModel(
+            name=name,
+            device_ids=device_ids,
+            description=description
+        )
+    except Exception as e:
+        logger.error(f"Error processing group {group_name}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing group: {str(e)}")
 
 @app.put("/groups/{group_name}", response_model=GroupModel)
 async def update_group(group_name: str, group_update: GroupModel):

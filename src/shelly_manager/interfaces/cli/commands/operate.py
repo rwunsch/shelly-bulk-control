@@ -204,12 +204,16 @@ def _display_operation_results(results: Dict):
         
         # Look up device details from registry
         device = device_registry.get_device(device_id)
-        device_name = device.name if device else "Unknown"
-        ip_address = device.ip_address if device else "Unknown"
+        device_name = device.name if device else "<Unknown>"
+        if device_name == "":
+            device_name = "<Unknown>"
+        ip_address = device.ip_address if device else "<Unknown>"
+        mac_address = device.mac_address if device else "<Unknown>"
+
         
         table.add_row(
             device_name,
-            device_id,
+            mac_address,
             ip_address,
             "[green]Yes[/green]" if success else "[red]No[/red]",
             result_text

@@ -18,6 +18,7 @@ import json
 from pathlib import Path
 from ..models.device_registry import device_registry
 from ..models.device_capabilities import DeviceCapabilities, CapabilityDiscovery, device_capabilities
+from ..models.device_config import device_config_manager
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -568,82 +569,52 @@ class DiscoveryService:
         except Exception as e:
             logger.error(f"Failed to save device info: {e}")
             
-    def _get_display_type(self, device: Device) -> str:
-        """Get the display type for the device (same as shown in table output)"""
-        # For Gen1 devices, use the raw_type directly
-        if device.generation == DeviceGeneration.GEN1:
-            if device.raw_type:
-                return device.raw_type  # Returns values like "SHPLG-S", "SHSW-1", etc.
-            else:
-                return "unknown"
-                
-        # For Gen2+ devices
-        if device.generation == DeviceGeneration.GEN2 or device.generation == DeviceGeneration.GEN3:
-            # Try to extract meaningful type from name, model, and raw_type
+    def determine_device_type(self, device):
+        """Determine the device type based on model, app, and other properties"""
+        logger = get_logger(__name__)
+        
+        # First try to match by model ID - most reliable
+        if device.model:
+            # Get devices for this generation
+            generation_str = f"gen{device.generation.value}"
+            device_types = {
+                "gen1": device_config_manager.gen1_devices,
+                "gen2": device_config_manager.gen2_devices,
+                "gen3": device_config_manager.gen3_devices,
+                "gen4": device_config_manager.gen4_devices,
+            }.get(generation_str, {})
             
-            # First check raw app which often contains the type
-            if device.raw_app:
-                if "plug" in device.raw_app.lower():
-                    if "plus" in device.raw_app.lower():
-                        return "PlusPlugS"
-                    return "SHPLG-S"
-                    
-                if "1pm" in device.raw_app.lower() and "mini" in device.raw_app.lower():
-                    if device.generation == DeviceGeneration.GEN3:
-                        return "Mini1PMG3"
-                    else:
-                        return "Plus1PMMini"
-                    
-                if "1pm" in device.raw_app.lower():
-                    return "Plus1PM"
-                    
-                if "2pm" in device.raw_app.lower():
-                    return "Plus2PM"
-                    
-                if "pro3" in device.raw_app.lower():
-                    return "Pro3"
-                    
-                if "mini" in device.raw_app.lower():
-                    if device.generation == DeviceGeneration.GEN3:
-                        return "Mini1G3"
-                    else:
-                        return "Plus1Mini"
+            model_upper = device.model.upper()
+            # Try direct match first
+            for device_id in device_types.keys():
+                if device_id.upper() == model_upper:
+                    logger.debug(f"Matched device by model: {device_id}")
+                    return device_id
             
-            # If we have a model, use it to determine type
-            if device.model:
-                model = device.model.lower()
-                if "plug" in model:
-                    return "PlusPlugS"
-                if "001p8" in model:  # SNSW-001P8EU = Plus1PMMini
-                    return "Plus1PMMini"
-                if "001p16" in model:  # SNSW-001P16EU = Plus1PM
-                    return "Plus1PM"
-                if "102p16" in model:  # SNSW-102P16EU = Plus2PM
-                    return "Plus2PM"
-                if "003xe16" in model:  # SPSW-003XE16EU = Pro3
-                    return "Pro3"
-                if "001x8" in model:  # S3SW-001X8EU = Mini1G3
-                    return "Mini1G3"
-                    
-            # Try to parse from device name
-            if device.name:
-                name = device.name.lower()
-                if "plugs" in name:
-                    return "PlusPlugS"
-                if "1pmmini" in name:
-                    if device.generation == DeviceGeneration.GEN3:
-                        return "Mini1PMG3"
-                    return "Plus1PMMini"
-                if "1pm" in name:
-                    return "Plus1PM"
-                if "2pm" in name:
-                    return "Plus2PM"
-                if "pro3" in name:
-                    return "Pro3"
-                if "1mini" in name:
-                    if device.generation == DeviceGeneration.GEN3:
-                        return "Mini1G3"
-                    return "Plus1Mini"
+            # Try partial match if needed
+            model_lower = device.model.lower()
+            for device_id in device_types.keys():
+                if device_id.lower() in model_lower:
+                    logger.debug(f"Matched device by partial model: {device_id}")
+                    return device_id
+        
+        # Try by raw_app next
+        if device.raw_app:
+            raw_app_lower = device.raw_app.lower()
+            # Get devices for this generation
+            generation_str = f"gen{device.generation.value}"
+            device_types = {
+                "gen1": device_config_manager.gen1_devices,
+                "gen2": device_config_manager.gen2_devices,
+                "gen3": device_config_manager.gen3_devices,
+                "gen4": device_config_manager.gen4_devices,
+            }.get(generation_str, {})
+            
+            # Try matching by app
+            for device_id in device_types.keys():
+                if device_id.lower() in raw_app_lower or raw_app_lower in device_id.lower():
+                    logger.debug(f"Matched device by app: {device_id}")
+                    return device_id
         
         # Default case - use a generic type based on generation
         if device.generation == DeviceGeneration.GEN1:

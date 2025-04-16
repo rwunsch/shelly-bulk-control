@@ -184,6 +184,7 @@ def _display_operation_results(results: Dict):
     table.add_column("Device Name", style="cyan")
     table.add_column("Device ID", style="dim")
     table.add_column("IP Address", style="blue")
+    table.add_column("Gen.", style="dim")
     table.add_column("Success")
     table.add_column("Result/Error")
     
@@ -209,12 +210,14 @@ def _display_operation_results(results: Dict):
             device_name = "<Unknown>"
         ip_address = device.ip_address if device else "<Unknown>"
         mac_address = device.mac_address if device else "<Unknown>"
+        generation = device.generation if device else "<Unknown>"
 
         
         table.add_row(
             device_name,
             mac_address,
             ip_address,
+            generation,
             "[green]Yes[/green]" if success else "[red]No[/red]",
             result_text
         )

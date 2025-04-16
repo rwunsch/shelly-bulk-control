@@ -96,6 +96,44 @@ cd shelly-bulk-control
 .\scripts\run_api_server.ps1 -Config "config\my_config.ini"
 ```
 
+## Development Environment Setup
+
+### Standard Setup (Windows/macOS/Linux)
+
+For development, you can use the provided scripts to start the API service with hot-reloading enabled:
+
+**Windows PowerShell:**
+```powershell
+.\scripts\start_api_dev.ps1
+```
+
+**macOS/Linux:**
+```bash
+./scripts/start_api_dev.sh
+```
+
+### WSL Development Setup
+
+If you're developing with the repository in WSL (Windows Subsystem for Linux) but need to access the API from Windows, the PowerShell scripts may encounter path translation issues. Instead, use this direct approach from your WSL terminal:
+
+```bash
+# Navigate to your project directory in WSL
+cd ~/git/shelly-bulk-control
+
+# Activate the virtual environment
+source .venv/bin/activate
+
+# Start the API server with hot-reloading
+python -m uvicorn src.shelly_manager.interfaces.api.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+This command starts the API server with the following configuration:
+- `--host 0.0.0.0`: Makes the server accessible from both WSL and Windows
+- `--port 8000`: Sets the default port
+- `--reload`: Enables hot-reloading for development
+
+You can then access the API from your Windows browser at `http://localhost:8000` or using the WSL IP address.
+
 ## Production Deployment Options
 
 ### Standalone Server

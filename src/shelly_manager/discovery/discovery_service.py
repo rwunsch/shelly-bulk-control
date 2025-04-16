@@ -82,7 +82,7 @@ class ShellyListener(ServiceListener):
                     self.discovery_service._queue_ip_for_http_discovery(ip_address, name, service_type)
 
 class DiscoveryService:
-    def __init__(self, debug: bool = False):
+    def __init__(self, debug: bool = False, chunk_size: int = 16, mdns_timeout: int = 10):
         self._devices: dict[str, Device] = {}
         self._callbacks: List[Callable[[Device], None]] = []
         self._zeroconf: Optional[Zeroconf] = None
@@ -98,9 +98,14 @@ class DiscoveryService:
         self._mdns_discovered_ips: set[str] = set()
         # Device capabilities instance
         self._capabilities = device_capabilities
+        # Configurable parameters
+        self._chunk_size = chunk_size
+        self._mdns_timeout = mdns_timeout
         
         logger.info("Initializing DiscoveryService")
         logger.debug(f"Debug mode: {debug}")
+        logger.debug(f"Chunk size: {chunk_size}")
+        logger.debug(f"mDNS timeout: {mdns_timeout}")
 
     def _load_device_types(self) -> Dict[str, Any]:
         """Load device types configuration from YAML"""
@@ -112,13 +117,19 @@ class DiscoveryService:
             logger.error(f"Failed to load device types configuration: {e}")
             return {"gen1_devices": {}, "gen2_devices": {}}
 
+    async def _ensure_session(self):
+        """Ensure an HTTP session exists, creating one if needed"""
+        if not self._session or self._session.closed:
+            self._session = aiohttp.ClientSession()
+            logger.debug("Created new aiohttp session")
+        return self._session
+        
     async def start(self):
         """Start the discovery service"""
         logger.info("Starting discovery service")
         
         # Initialize aiohttp session for HTTP probing (fallback)
-        self._session = aiohttp.ClientSession()
-        logger.debug("Initialized aiohttp session")
+        await self._ensure_session()
         
         # Start mDNS discovery for both Shelly and HTTP service types
         service_types = ["_shelly._tcp.local.", "_http._tcp.local."]
@@ -194,67 +205,6 @@ class DiscoveryService:
         except Exception as e:
             logger.error(f"Error in _is_shelly_device: {e}")
             return False
-
-
-    def _parse_shelly_response(self, ip: str, data: Dict[str, Any]) -> Optional[Device]:
-        """Parse /shelly endpoint response into a Device object"""
-        logger.debug(f"Parsing response from {ip}: {data}")
-        
-        try:
-            # Extract common fields
-            mac = data.get("mac", "unknown")
-            device_id = mac  # Always use MAC as device ID
-            
-            # Store raw device information
-            raw_type = data.get("type", "")
-            raw_model = data.get("model", "")
-            raw_app = data.get("app", "")
-            
-            # Print raw device information for debugging
-            logger.debug(f"RAW DATA - ip: {ip}, type: {raw_type}, model: {raw_model}, app: {raw_app}")
-            
-            # Determine generation based on response structure
-            generation = DeviceGeneration.UNKNOWN
-            if "gen" in data:
-                generation = DeviceGeneration(f"gen{data['gen']}")
-            elif raw_type.startswith("plus") or raw_type.startswith("shellyplus"):
-                generation = DeviceGeneration.GEN2
-            else:
-                generation = DeviceGeneration.GEN1
-            
-            # Create device with common fields
-            device = Device(
-                id=device_id,
-                name=data.get("name", ""),
-                generation=generation,
-                ip_address=ip,
-                mac_address=mac,
-                firmware_version=data.get("ver") or data.get("fw", ""),
-                status=DeviceStatus.ONLINE,
-                discovery_method="unknown",  # We'll set this in _probe_device
-                model=raw_model,
-                slot=data.get("slot"),
-                auth_enabled=data.get("auth_en"),
-                auth_domain=data.get("auth_domain"),
-                fw_id=data.get("fw_id"),
-                raw_type=raw_type,
-                raw_model=raw_model,
-                raw_app=raw_app,
-                eco_mode_enabled=data.get("eco_mode_enabled", False)  # Set default to False
-            )
-            
-            # Log important information for debugging
-            logger.debug(f"Device generation: {generation.value}")
-            logger.debug(f"Raw type: {raw_type}")
-            logger.debug(f"App type: {raw_app}")
-            logger.debug(f"Model: {raw_model}")
-            
-            logger.debug(f"Created Device object: {device}")
-            return device
-            
-        except Exception as e:
-            logger.error(f"Error parsing response from {ip}: {e}")
-            return None
 
     def _save_device_info(self, device: Device):
         """Save discovered device information to a file"""
@@ -337,7 +287,7 @@ class DiscoveryService:
             if via_mdns:
                 self._mdns_discovered_ips.add(ip_address)
 
-    async def discover_devices(self, network: str = None, force_http: bool = False, ip_addresses: List[str] = None) -> List[Device]:
+    async def discover_devices(self, network: str = None, force_http: bool = False, ip_addresses: List[str] = None, auto_optimize: bool = True) -> List[Device]:
         """
         Discover Shelly devices on the network.
         
@@ -345,6 +295,7 @@ class DiscoveryService:
             network: Network CIDR to scan (e.g., "192.168.1.0/24")
             force_http: Whether to force HTTP probing even if mDNS is available
             ip_addresses: List of specific IP addresses to probe
+            auto_optimize: Whether to automatically optimize chunk size based on network conditions
             
         Returns:
             List of discovered devices
@@ -364,10 +315,21 @@ class DiscoveryService:
                 # Fallback to a common home network - prefer 192.168.3.0/24 as indicated
                 network = "192.168.3.0/24"
                 logger.warning(f"Could not detect network, using default: {network}")
+        
+        # Detect if running in WSL to adjust discovery strategy
+        is_wsl = self._is_wsl() if hasattr(self, '_is_wsl') else False
+        if is_wsl:
+            logger.info("WSL detected, adjusting discovery strategy")
+            force_http = True
                 
         # Initialize aiohttp session for HTTP probing
-        self._session = aiohttp.ClientSession()
-        logger.debug("Initialized aiohttp session")
+        await self._ensure_session()
+        
+        # Optimize chunk size if requested
+        if auto_optimize:
+            optimal_chunk_size = await self._estimate_optimal_chunk_size(network)
+            self._chunk_size = optimal_chunk_size
+            logger.info(f"Auto-optimized chunk size: {self._chunk_size}")
         
         # Determine if we need to probe specific IPs
         if ip_addresses:
@@ -381,19 +343,15 @@ class DiscoveryService:
             await self.start()
             
             # For normal discovery, we'll use both mDNS and HTTP scanning
-            # Start mDNS discovery first
-            is_wsl = self._is_wsl()
-            
-            if is_wsl:
-                logger.info("WSL detected, skipping mDNS discovery and using HTTP probing directly")
-                force_http = True
-            
-            if not force_http and not is_wsl:
+            # Start mDNS discovery first unless force_http is set or on WSL
+            if not force_http:
                 logger.info("Starting mDNS discovery")
                 await self._discover_mdns()
+            else:
+                logger.info("Skipping mDNS discovery due to force_http or WSL environment")
             
             # If mDNS didn't find any devices or we're forcing HTTP, do a network probe
-            if force_http or is_wsl or len(self._mdns_discovered_ips) == 0:
+            if force_http or len(self._mdns_discovered_ips) == 0:
                 logger.info(f"Scanning network {network} for devices...")
                 await self._probe_network(network)
         
@@ -414,133 +372,152 @@ class DiscoveryService:
         queue_list = list(self._discovery_queue)
         self._discovery_queue.clear()  # Clear the queue after copying
         
-        # Process each IP
-        for ip in queue_list:
-            if ip in self._discovered_ips:
-                logger.debug(f"Skipping already discovered IP: {ip}")
-                continue
-                
-            # Mark as discovered to prevent duplicates
-            self._discovered_ips.add(ip)
+        # Filter out already discovered IPs
+        queue_list = [ip for ip in queue_list if ip not in self._discovered_ips]
+        logger.info(f"Filtered queue contains {len(queue_list)} unique IP addresses")
+        
+        # Mark all as discovered to prevent duplicates in future runs
+        self._discovered_ips.update(queue_list)
+        
+        # Process IPs in parallel using asyncio.gather
+        if queue_list:
+            logger.info(f"Processing IPs in parallel batches of {self._chunk_size}")
             
-            # Discover the device via HTTP
-            device = await self._probe_device(ip)
-            
-            if device:
-                # Add device to discovered devices
-                self._devices[device.id] = device
+            # Process in chunks to avoid creating too many concurrent connections
+            for i in range(0, len(queue_list), self._chunk_size):
+                chunk = queue_list[i:i + self._chunk_size]
+                logger.debug(f"Processing chunk of {len(chunk)} IPs")
                 
-                # Save device info
-                self._save_device_info(device)
+                # Create probe tasks for all IPs in this chunk
+                tasks = [self._probe_device(ip) for ip in chunk]
                 
-                # Notify callbacks
-                logger.debug(f"Notifying callbacks about device {device.id}")
-                for callback in self._callbacks:
-                    try:
-                        callback(device)
-                    except Exception as e:
-                        logger.error(f"Error in callback: {e}")
-            else:
-                logger.debug(f"No Shelly device found at {ip}")
+                # Run them concurrently and wait for all to complete
+                results = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Process results
+                for i, result in enumerate(results):
+                    if isinstance(result, Exception):
+                        logger.error(f"Error probing device at {chunk[i]}: {result}")
+                    elif result:  # We got a device
+                        device = result
+                        # Add device to discovered devices
+                        self._devices[device.id] = device
+                        
+                        # Save device info
+                        self._save_device_info(device)
+                        
+                        # Notify callbacks
+                        logger.debug(f"Notifying callbacks about device {device.id}")
+                        for callback in self._callbacks:
+                            try:
+                                callback(device)
+                            except Exception as e:
+                                logger.error(f"Error in callback: {e}")
         
         logger.info(f"HTTP discovery complete. Found {len(self._devices)} devices")
 
-    def _is_wsl(self) -> bool:
-        """Check if running on Windows Subsystem for Linux"""
-        try:
-            # First check if we're on Linux at all
-            if os.name != 'posix' or not platform.system() == 'Linux':
-                logger.debug("Not running on Linux, definitely not WSL")
-                return False
-                
-            # Now check for WSL-specific markers
-            if os.path.exists('/proc/version'):
-                with open('/proc/version', 'r') as f:
-                    version_content = f.read().lower()
-                    if 'microsoft' in version_content or 'wsl' in version_content:
-                        logger.debug("WSL detected via /proc/version")
-                        return True
-                        
-            # Additional check for WSL-specific paths
-            if os.path.exists('/run/WSL'):
-                logger.debug("WSL detected via /run/WSL")
-                return True
-                
-            logger.debug("Running on Linux but not WSL")
-            return False
-        except Exception as e:
-            logger.error(f"Error detecting WSL: {e}")
-            return False
-
     async def _probe_specific_ips(self, ip_addresses: List[str]) -> None:
         """Probe specific IP addresses for Shelly devices"""
-        if not self._session:
-            self._session = aiohttp.ClientSession()
+        await self._ensure_session()
         
         logger.info(f"Probing {len(ip_addresses)} specific IP addresses")
+        
+        # Process IPs in parallel based on configured chunk size
+        chunk_size = self._chunk_size
+        logger.info(f"Using chunk size of {chunk_size} for IP probing")
         
         # Track statistics
         total_discovered = 0
         total_errors = 0
+        chunks_processed = 0
         
-        # Probe each IP address
-        for ip in ip_addresses:
-            logger.info(f"Probing {ip}")
-            device = await self._probe_device(ip)
+        # Process IPs in chunks to limit concurrent connections
+        for i in range(0, len(ip_addresses), chunk_size):
+            chunks_processed += 1
+            chunk = ip_addresses[i:i + chunk_size]
+            logger.info(f"Processing chunk {chunks_processed}/{(len(ip_addresses) + chunk_size - 1) // chunk_size} ({len(chunk)} IPs)")
             
-            if device:
-                # Add device to discovered devices
-                self._devices[device.id] = device
+            # Create tasks for all IPs in this chunk
+            tasks = [self._probe_device(ip) for ip in chunk]
+            
+            # Run them concurrently and wait for all to complete
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            
+            # Process results
+            for j, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"Error probing device at {chunk[j]}: {result}")
+                    total_errors += 1
+                elif result:  # We got a device
+                    device = result
+                    # Add device to discovered devices
+                    self._devices[device.id] = device
+                    
+                    # Save device info
+                    self._save_device_info(device)
+                    
+                    # Add to discovery queue and track as discovered
+                    self._discovery_queue.add(device.ip_address)
+                    self._discovered_ips.add(device.ip_address)
+                    
+                    # Notify callbacks
+                    logger.debug(f"Notifying callbacks about device {device.id}")
+                    for callback in self._callbacks:
+                        try:
+                            callback(device)
+                        except Exception as e:
+                            logger.error(f"Error in callback: {e}")
+                    
+                    total_discovered += 1
+                else:
+                    total_errors += 1
+            
+            # Log chunk progress
+            logger.info(f"Chunk {chunks_processed} complete. Discovered: {total_discovered}, Errors: {total_errors}")
                 
-                # Save device info
-                self._save_device_info(device)
-                
-                # Add to discovery queue for capabilities discovery
-                self._discovery_queue.add(ip)
-                self._discovered_ips.add(ip)
-                
-                # Notify callbacks
-                logger.debug(f"Notifying callbacks about device {device.id}")
-                for callback in self._callbacks:
-                    try:
-                        callback(device)
-                    except Exception as e:
-                        logger.error(f"Error in callback: {e}")
-                
-                total_discovered += 1
-            else:
-                total_errors += 1
-        
         logger.info(f"IP probe complete. Discovered {total_discovered} devices, encountered {total_errors} errors")
-
-    async def _start_discovery(self):
-        """Start the discovery service"""
-        await self.start()
 
     async def _discover_mdns(self):
         """Discover devices via mDNS - collect IPs only"""
         logger.info("Waiting for mDNS discovery to complete...")
         
-        # Wait for mDNS discovery
-        discovery_time = 10  # seconds
+        # Configurable parameters
+        discovery_time = self._mdns_timeout  # maximum seconds to wait
+        check_interval = 1  # seconds between checks
+        early_termination_threshold = 3  # consecutive intervals with no new devices
+        
+        # Track discovery progress
         start_time = time.time()
+        consecutive_no_discovery = 0
+        previous_device_count = len(self._discovery_queue)
         
-        # Check every second for new IPs in the discovery queue
-        initial_queue_size = len(self._discovery_queue)
-        
-        # Track progress
+        # Wait for mDNS discovery, with potential early termination
         for i in range(discovery_time):
-            await asyncio.sleep(1)
-            current_queue_size = len(self._discovery_queue)
+            await asyncio.sleep(check_interval)
+            current_device_count = len(self._discovery_queue)
             
-            if current_queue_size > initial_queue_size:
-                new_ips = current_queue_size - initial_queue_size
-                logger.info(f"Found {new_ips} new IPs after {i+1} seconds (total: {current_queue_size})")
-                initial_queue_size = current_queue_size
+            if current_device_count > previous_device_count:
+                # Found new devices in this interval
+                new_devices = current_device_count - previous_device_count
+                logger.info(f"Found {new_devices} new IPs after {i+1} seconds (total: {current_device_count})")
+                previous_device_count = current_device_count
+                consecutive_no_discovery = 0  # Reset counter since we found devices
+            else:
+                # No new devices in this interval
+                consecutive_no_discovery += 1
+                logger.debug(f"No new devices found in interval {i+1}. ({consecutive_no_discovery}/{early_termination_threshold})")
+                
+                # Check for early termination if we've already found some devices
+                if (current_device_count > 0 and 
+                    consecutive_no_discovery >= early_termination_threshold):
+                    logger.info(f"mDNS discovery terminating early after {i+1} seconds due to no new devices")
+                    break
+        
+        elapsed_time = time.time() - start_time
         
         # If no devices found, provide more debugging info
         if len(self._discovery_queue) == 0:
-            logger.warning(f"No device IPs found via mDNS after {discovery_time} seconds")
+            logger.warning(f"No device IPs found via mDNS after {elapsed_time:.1f} seconds")
             logger.info("This could be due to:")
             logger.info("1. No devices supporting mDNS on the network")
             logger.info("2. Network configuration blocking mDNS traffic")
@@ -562,7 +539,7 @@ class DiscoveryService:
             except Exception as e:
                 logger.warning(f"Error checking network interfaces: {e}")
         else:
-            logger.info(f"Successfully collected {len(self._discovery_queue)} device IPs via mDNS")
+            logger.info(f"Successfully collected {len(self._discovery_queue)} device IPs via mDNS in {elapsed_time:.1f} seconds")
 
     async def _probe_network(self, network: str):
         """Probe network for devices using HTTP"""
@@ -576,8 +553,10 @@ class DiscoveryService:
             total_ips = len(ip_list)
             logger.info(f"Total IPs to probe: {total_ips}")
             
-            # Process IPs in chunks of 16
-            chunk_size = 16
+            # Determine optimal chunk size based on network conditions
+            chunk_size = await self._estimate_optimal_chunk_size(network)
+            logger.info(f"Using chunk size of {chunk_size} for network probing")
+            
             discovered = 0
             errors = 0
             chunks_processed = 0
@@ -622,8 +601,7 @@ class DiscoveryService:
 
     async def _probe_device(self, ip: str, retries: int = 2) -> Optional[Device]:
         """Probe a single IP address for a Shelly device and get detailed information"""
-        if not self._session:
-            self._session = aiohttp.ClientSession()
+        await self._ensure_session()
 
         max_retries = retries
         retry_delay = 1  # seconds
@@ -682,7 +660,8 @@ class DiscoveryService:
                         logger.debug(f"Received response from {ip}/shelly: {data}")
                         
                         # Parse response into a Device object
-                        return self._parse_shelly_response(ip, data)
+                        device = await self._create_device_from_shelly_response(ip, data)
+                        return device
                     else:
                         logger.debug(f"Non-200 response from {ip}/shelly: {response.status}")
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
@@ -696,6 +675,68 @@ class DiscoveryService:
                 break
         
         return None
+
+    async def _create_device_from_shelly_response(self, ip: str, data: Dict[str, Any]) -> Optional[Device]:
+        """Parse /shelly endpoint response into a Device object"""
+        logger.debug(f"Parsing response from {ip}: {data}")
+        
+        try:
+            # Extract common fields
+            mac = data.get("mac", "unknown")
+            # Format MAC address consistently (uppercase, no colons)
+            formatted_mac = self._format_mac(mac, uppercase=True, include_colons=False)
+            device_id = formatted_mac  # Always use formatted MAC as device ID
+            
+            # Store raw device information
+            raw_type = data.get("type", "")
+            raw_model = data.get("model", "")
+            raw_app = data.get("app", "")
+            
+            # Print raw device information for debugging
+            logger.debug(f"RAW DATA - ip: {ip}, type: {raw_type}, model: {raw_model}, app: {raw_app}")
+            
+            # Determine generation based on response structure
+            generation = DeviceGeneration.UNKNOWN
+            if "gen" in data:
+                generation = DeviceGeneration(f"gen{data['gen']}")
+            elif raw_type.startswith("plus") or raw_type.startswith("shellyplus"):
+                generation = DeviceGeneration.GEN2
+            else:
+                generation = DeviceGeneration.GEN1
+            
+            # Create device with common fields
+            device = Device(
+                id=device_id,
+                name=data.get("name", ""),
+                generation=generation,
+                ip_address=ip,
+                mac_address=self._format_mac(mac, uppercase=False, include_colons=False),  # Store without colons
+                firmware_version=data.get("ver") or data.get("fw", ""),
+                status=DeviceStatus.ONLINE,
+                discovery_method="unknown",  # We'll set this in _probe_device
+                model=raw_model,
+                slot=data.get("slot"),
+                auth_enabled=data.get("auth_en"),
+                auth_domain=data.get("auth_domain"),
+                fw_id=data.get("fw_id"),
+                raw_type=raw_type,
+                raw_model=raw_model,
+                raw_app=raw_app,
+                eco_mode_enabled=data.get("eco_mode_enabled", False)  # Set default to False
+            )
+            
+            # Log important information for debugging
+            logger.debug(f"Device generation: {generation.value}")
+            logger.debug(f"Raw type: {raw_type}")
+            logger.debug(f"App type: {raw_app}")
+            logger.debug(f"Model: {raw_model}")
+            
+            logger.debug(f"Created Device object: {device}")
+            return device
+            
+        except Exception as e:
+            logger.error(f"Error parsing response from {ip}: {e}")
+            return None
 
     async def _get_gen1_details(self, ip: str, device: Device) -> Device:
         """Get comprehensive details for a Gen1 device"""
@@ -787,7 +828,8 @@ class DiscoveryService:
                     if "id" in data:
                         device.id = data["id"]
                     if "mac" in data:
-                        device.mac_address = data["mac"]
+                        # Use standardized MAC format without colons
+                        device.mac_address = self._format_mac(data["mac"], uppercase=False, include_colons=False)
                     if "model" in data:
                         device.model = data["model"]
                     if "fw_version" in data:
@@ -907,8 +949,7 @@ class DiscoveryService:
             capability_discovery = CapabilityDiscovery(self._capabilities)
             
             # Ensure session is initialized
-            if not self._session:
-                self._session = aiohttp.ClientSession()
+            await self._ensure_session()
                 
             # Discover device capabilities
             capability = await capability_discovery.discover_device_capabilities(device)
@@ -942,3 +983,126 @@ class DiscoveryService:
             results[device_id] = success
             
         return results
+
+    def _format_mac(self, mac_address: str, uppercase: bool = True, include_colons: bool = False) -> str:
+        """
+        Standardize MAC address formatting.
+        
+        Args:
+            mac_address: The MAC address to format
+            uppercase: Whether to return uppercase (True) or lowercase (False)
+            include_colons: Whether to include colons in the formatted MAC
+            
+        Returns:
+            Formatted MAC address string
+        """
+        if not mac_address:
+            return "unknown"
+            
+        # Remove any separators (colons, hyphens, dots)
+        clean_mac = mac_address.replace(":", "").replace("-", "").replace(".", "")
+        
+        # Ensure correct format
+        if len(clean_mac) != 12:
+            logger.warning(f"Invalid MAC address format: {mac_address}")
+            return mac_address
+            
+        # Format with or without colons
+        if include_colons:
+            formatted_mac = ":".join([clean_mac[i:i+2] for i in range(0, 12, 2)])
+        else:
+            formatted_mac = clean_mac
+            
+        # Apply case formatting
+        return formatted_mac.upper() if uppercase else formatted_mac.lower()
+
+    async def _estimate_optimal_chunk_size(self, network: str = None) -> int:
+        """
+        Estimates optimal chunk size for parallel processing based on network conditions and system resources.
+        
+        Args:
+            network: Optional network CIDR to use for testing
+            
+        Returns:
+            Recommended chunk size for parallel processing
+        """
+        # Default chunk size as fallback
+        default_chunk_size = self._chunk_size
+        
+        try:
+            # Get available CPU cores
+            import multiprocessing
+            available_cores = multiprocessing.cpu_count()
+            
+            # Adjust for hyper-threading - we want physical cores
+            physical_cores = max(1, available_cores // 2)
+            
+            # Start with a base multiplier
+            base_multiplier = 2
+            
+            # Test network latency to determine if we should increase/decrease
+            test_ip = None
+            
+            # If network specified, use first IP in that network
+            if network:
+                network_obj = ipaddress.ip_network(network)
+                hosts = list(network_obj.hosts())
+                if hosts:
+                    test_ip = str(hosts[0])
+            
+            # Fallback to gateway IP
+            if not test_ip:
+                gateway = None
+                try:
+                    # Try to get default gateway
+                    import socket
+                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    s.connect(("8.8.8.8", 80))
+                    local_ip = s.getsockname()[0]
+                    s.close()
+                    
+                    # Extract first three octets and append .1 as common gateway
+                    gateway = ".".join(local_ip.split(".")[:3]) + ".1"
+                except Exception:
+                    pass
+                
+                test_ip = gateway or "192.168.1.1"  # Fallback to common gateway
+            
+            # Test latency
+            import asyncio
+            import time
+            latency_ms = 100  # Default assumption
+            
+            # Create a simple HTTP GET request to measure latency
+            await self._ensure_session()
+            try:
+                start_time = time.time()
+                async with self._session.get(f"http://{test_ip}", timeout=2) as response:
+                    # Just getting the response status is enough
+                    status = response.status
+                    # Calculate latency
+                    latency_ms = (time.time() - start_time) * 1000
+            except Exception:
+                # If timeout or error, assume high latency
+                latency_ms = 500
+            
+            # Adjust multiplier based on latency
+            if latency_ms < 10:  # Very fast network
+                base_multiplier = 4
+            elif latency_ms < 50:  # Fast network
+                base_multiplier = 3
+            elif latency_ms > 200:  # Slow network
+                base_multiplier = 1
+            
+            # Calculate chunk size based on cores and network conditions
+            chunk_size = physical_cores * base_multiplier
+            
+            # Cap at reasonable limits
+            chunk_size = max(4, min(chunk_size, 32))
+            
+            logger.info(f"Estimated optimal chunk size: {chunk_size} (latency: {latency_ms:.1f}ms, physical cores: {physical_cores})")
+            return chunk_size
+            
+        except Exception as e:
+            logger.warning(f"Error estimating optimal chunk size: {e}, using default ({default_chunk_size})")
+            return default_chunk_size

@@ -152,64 +152,119 @@ class ConfigManager:
                 processed_settings = self._process_gen2_settings(settings, before_settings)
                 logger.debug(f"Processed Gen2 settings: {json.dumps(processed_settings, indent=2)}")
                 
-                # For Gen2, settings need to be in {"config": settings} format
-                request_data = {"config": processed_settings}
-                logger.debug(f"Gen2 request data: {json.dumps(request_data, indent=2)}")
+                # Try different endpoints for GEN2 devices
+                success = False
                 
-                url = f"http://{device.ip_address}/rpc/Shelly.SetConfig"
-                logger.debug(f"Sending POST request to Gen2 endpoint: {url}")
+                # Let's try Shelly.SetConfig first
+                if not success:
+                    try:
+                        url = f"http://{device.ip_address}/rpc/Shelly.SetConfig"
+                        request_data = {"config": processed_settings}
+                        logger.debug(f"Trying Gen2 endpoint (1): {url}")
+                        logger.debug(f"Request data: {json.dumps(request_data, indent=2)}")
+                        
+                        async with self._session.post(url, json=request_data) as response:
+                            response_text = await response.text()
+                            logger.debug(f"Response status: {response.status}")
+                            logger.debug(f"Response text: {response_text}")
+                            
+                            if response.status == 200:
+                                success = True
+                                logger.debug(f"Successfully set settings with Shelly.SetConfig")
+                            else:
+                                logger.debug(f"Shelly.SetConfig failed with status {response.status}")
+                    except Exception as e:
+                        logger.debug(f"Shelly.SetConfig failed: {str(e)}")
                 
-                try:
-                    async with self._session.post(url, json=request_data) as response:
-                        status_code = response.status
-                        logger.debug(f"Response status: {status_code}")
+                # If Shelly.SetConfig failed, try updating individual components
+                if not success and "sys" in processed_settings and "device" in processed_settings["sys"]:
+                    try:
+                        url = f"http://{device.ip_address}/rpc/Shelly.SetDeviceConfig"
+                        request_data = processed_settings["sys"]["device"]
+                        logger.debug(f"Trying Gen2 endpoint (2): {url}")
+                        logger.debug(f"Request data: {json.dumps(request_data, indent=2)}")
                         
-                        response_text = await response.text()
-                        logger.debug(f"Gen2 device raw response: {response_text}")
+                        async with self._session.post(url, json=request_data) as response:
+                            response_text = await response.text()
+                            logger.debug(f"Response status: {response.status}")
+                            logger.debug(f"Response text: {response_text}")
+                            
+                            if response.status == 200:
+                                success = True
+                                logger.debug(f"Successfully set settings with Shelly.SetDeviceConfig")
+                            else:
+                                logger.debug(f"Shelly.SetDeviceConfig failed with status {response.status}")
+                    except Exception as e:
+                        logger.debug(f"Shelly.SetDeviceConfig failed: {str(e)}")
+                
+                # Another possible endpoint
+                if not success and "name" in settings:
+                    try:
+                        url = f"http://{device.ip_address}/rpc/Sys.SetConfig"
+                        request_data = {"config": {"device": {"name": settings["name"]}}}
+                        logger.debug(f"Trying Gen2 endpoint (3): {url}")
+                        logger.debug(f"Request data: {json.dumps(request_data, indent=2)}")
                         
-                        try:
-                            response.raise_for_status()
-                        except aiohttp.ClientResponseError as e:
-                            logger.error(f"HTTP error from Gen2 device: {e.status} - {e.message}")
-                            logger.error(f"Response body: {response_text}")
-                            return False
-                        
-                        response_json = await response.json()
-                        logger.debug(f"Gen2 device JSON response: {json.dumps(response_json, indent=2)}")
-                        
-                        # Check if there's an error in the response
-                        if isinstance(response_json, dict) and response_json.get('error'):
-                            logger.error(f"Error from Gen2 device: {response_json['error']}")
-                            return False
-                        
-                        logger.debug(f"Settings sent successfully to Gen2 device {device.id}")
-                        
-                        # Wait a moment for the device to apply settings
-                        logger.debug(f"Waiting for Gen2 device {device.id} to apply settings...")
-                        await asyncio.sleep(2)
-                        
-                        # Get settings after change
-                        logger.debug(f"Getting settings after change for {device.id}")
-                        after_settings = await self.get_device_settings(device)
-                        
-                        if not after_settings:
-                            logger.error(f"Failed to get settings after change for {device.id}")
-                            return False
-                        
-                        # Verify changes for Gen2
-                        logger.debug(f"Verifying settings changes for Gen2 device {device.id}")
-                        verified = self._verify_gen2_settings_changed(processed_settings, before_settings, after_settings)
-                        
-                        if verified:
-                            logger.info(f"Settings successfully verified for Gen2 device {device.id}")
-                        else:
-                            logger.warning(f"Some settings may not have been applied correctly for Gen2 device {device.id}")
-                        
-                        return verified
-                except aiohttp.ClientConnectionError as e:
-                    logger.error(f"Connection error to Gen2 device {device.id} at {device.ip_address}: {str(e)}")
+                        async with self._session.post(url, json=request_data) as response:
+                            response_text = await response.text()
+                            logger.debug(f"Response status: {response.status}")
+                            logger.debug(f"Response text: {response_text}")
+                            
+                            if response.status == 200:
+                                success = True
+                                logger.debug(f"Successfully set settings with Sys.SetConfig")
+                            else:
+                                logger.debug(f"Sys.SetConfig failed with status {response.status}")
+                    except Exception as e:
+                        logger.debug(f"Sys.SetConfig failed: {str(e)}")
+                
+                if not success:
+                    logger.error(f"Failed to set settings for GEN2 device {device.id} - all API endpoints failed")
                     return False
+                
+                # Wait a moment for the device to apply settings
+                logger.debug(f"Waiting for Gen2 device {device.id} to apply settings...")
+                await asyncio.sleep(2)
+                
+                # Get settings after change
+                logger.debug(f"Getting settings after change for {device.id}")
+                after_settings = await self.get_device_settings(device)
+                
+                if not after_settings:
+                    logger.error(f"Failed to get settings after change for {device.id}")
+                    return False
+                
+                # Verify changes for Gen2
+                logger.debug(f"Verifying settings changes for Gen2 device {device.id}")
+                
+                # Special verification for name
+                if "name" in settings:
+                    before_name = None
+                    after_name = None
                     
+                    # Try to find name in different locations
+                    if "sys" in before_settings and "device" in before_settings["sys"]:
+                        before_name = before_settings["sys"]["device"].get("name")
+                    
+                    if "sys" in after_settings and "device" in after_settings["sys"]:
+                        after_name = after_settings["sys"]["device"].get("name")
+                    
+                    if after_name == settings["name"]:
+                        logger.info(f"Device name successfully changed from '{before_name}' to '{after_name}'")
+                        return True
+                    else:
+                        logger.warning(f"Failed to change device name. Expected: '{settings['name']}', Actual: '{after_name}'")
+                        return False
+                
+                # For other settings, use the standard verification
+                verified = self._verify_gen2_settings_changed(processed_settings, before_settings, after_settings)
+                
+                if verified:
+                    logger.info(f"Settings successfully verified for Gen2 device {device.id}")
+                else:
+                    logger.warning(f"Some settings may not have been applied correctly for Gen2 device {device.id}")
+                
+                return verified
         except aiohttp.ClientResponseError as e:
             logger.error(f"HTTP error applying settings to {device.id} ({device.ip_address}): {e.status}, {e.message}")
             return False
@@ -256,7 +311,23 @@ class ConfigManager:
         """
         logger.debug("Processing Gen2 settings")
         result = {}
+        
+        # Handle special properties that need to be in specific locations
+        if "name" in settings:
+            # For GEN2 devices, 'name' should be in sys.device.name
+            if "sys" not in result:
+                result["sys"] = {}
+            if "device" not in result["sys"]:
+                result["sys"]["device"] = {}
+            result["sys"]["device"]["name"] = settings["name"]
+            logger.debug(f"Gen2 setting: moved 'name' to sys.device.name with value '{settings['name']}'")
+            
+        # Process all other settings
         for key, value in settings.items():
+            # Skip 'name' as we've already processed it specially
+            if key == "name":
+                continue
+                
             # Handle nested paths with dot notation
             if "." in key:
                 # Split by dots to get nested keys

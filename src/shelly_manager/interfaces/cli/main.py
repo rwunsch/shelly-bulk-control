@@ -476,6 +476,28 @@ def set_settings(device_id: str, setting: list[str], debug: bool = typer.Option(
                 all_verified = True
                 
                 for key, expected_value_str in settings.items():
+                    # Special case for name property in GEN2 devices
+                    if key == "name" and device_to_use.generation != DeviceGeneration.GEN1:
+                        # For GEN2 devices, name is in sys.device.name
+                        before_name = None
+                        if "sys" in current_settings and "device" in current_settings["sys"]:
+                            before_name = current_settings["sys"]["device"].get("name")
+                        
+                        after_name = None
+                        if "sys" in after_settings and "device" in after_settings["sys"]:
+                            after_name = after_settings["sys"]["device"].get("name")
+                        
+                        expected_value = expected_value_str
+                        
+                        if after_name == expected_value:
+                            console.print(f"  [green]✓ {key}[/green]: Changed from {before_name} to {after_name}")
+                        else:
+                            console.print(f"  [red]✗ {key}[/red]: Expected {expected_value}, but got {after_name}", style="red")
+                            all_verified = False
+                        
+                        # Skip the rest of the loop for this key
+                        continue
+                    
                     # Convert expected value string to appropriate type for comparison
                     expected_value = expected_value_str
                     if expected_value_str.lower() == 'true':
@@ -490,7 +512,7 @@ def set_settings(device_id: str, setting: list[str], debug: bool = typer.Option(
                         except ValueError:
                             pass
                     
-                    # For Gen2 devices, handle nested paths
+                    # For Gen2 devices, handle nested paths with dot notation
                     if "." in key and device_to_use.generation != DeviceGeneration.GEN1:
                         # Split the path
                         parts = key.split(".")

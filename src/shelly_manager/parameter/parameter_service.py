@@ -171,10 +171,21 @@ class ParameterService:
         """
         result = {}
         
-        # Get device capability
-        capability = device_capabilities.get_capability_for_device(device)
+        # Check if device has a specific capability type file
+        capability = None
+        device_type = device.raw_type
         
-        # If no capability found, try to discover it
+        # Try to get capability directly by device type
+        if device_type:
+            logger.debug(f"Looking for capability directly by type: {device_type}")
+            capability = device_capabilities.get_capability(device_type)
+        
+        # If not found, try through the device capability mapping
+        if not capability:
+            logger.debug(f"Looking for capability through device mapping for {device.id}")
+            capability = device_capabilities.get_capability_for_device(device)
+            
+        # If still no capability found, try to discover it
         if not capability:
             logger.info(f"No capability found for {device.id}, attempting discovery")
             discovery_service = DiscoveryService()
@@ -190,9 +201,11 @@ class ParameterService:
         
         # If we have a capability definition, get all parameters
         if capability:
+            logger.info(f"Using capability definition for {device.id} (type: {capability.device_type})")
+            # Only request parameters that are defined in the capability
             for param_name, param_info in capability.parameters.items():
                 # Get current value if possible
-                success, value = await self.get_parameter_value(device, param_name)
+                success, value = await self.get_parameter_value(device, param_name, log_warnings=False)
                 
                 result[param_name] = {
                     "type": param_info.get("type", "unknown"),
@@ -202,16 +215,186 @@ class ParameterService:
                     "parameter_path": param_info.get("parameter_path", param_name),
                     "value": value if success else None
                 }
+        else:
+            # If no capability is available, get basic parameters from known endpoints
+            logger.info(f"No capability definition found, using basic parameter detection for {device.id}")
+            
+            # Get general device info
+            if device.generation == DeviceGeneration.GEN1:
+                # For Gen1 devices, get settings and status
+                params = await self._get_gen1_basic_parameters(device)
+                result.update(params)
+            else:
+                # For Gen2 devices, use RPC methods
+                params = await self._get_gen2_basic_parameters(device)
+                result.update(params)
         
         return result
     
-    async def get_parameter_value(self, device: Device, parameter_name: str) -> Tuple[bool, Any]:
+    async def _get_gen1_basic_parameters(self, device: Device) -> Dict[str, Dict[str, Any]]:
+        """Get basic parameters from a Gen1 device without warnings."""
+        result = {}
+        
+        # Try to get settings
+        try:
+            url = f"http://{device.ip_address}/settings"
+            async with self.session.get(url, timeout=5) as response:
+                if response.status == 200:
+                    settings = await response.json()
+                    
+                    # Process each setting
+                    for key, value in settings.items():
+                        result[key] = {
+                            "type": self._infer_parameter_type(value),
+                            "description": f"Parameter {key}",
+                            "api": "settings",
+                            "read_only": False,  # Assume settings are writable by default
+                            "value": value
+                        }
+        except Exception as e:
+            logger.debug(f"Error getting settings for Gen1 device {device.id}: {str(e)}")
+        
+        # Try to get status
+        try:
+            url = f"http://{device.ip_address}/status"
+            async with self.session.get(url, timeout=5) as response:
+                if response.status == 200:
+                    status = await response.json()
+                    
+                    # Process each status field
+                    for key, value in status.items():
+                        result[key] = {
+                            "type": self._infer_parameter_type(value),
+                            "description": f"Parameter {key}",
+                            "api": "status",
+                            "read_only": True,  # Status values are generally read-only
+                            "value": value
+                        }
+        except Exception as e:
+            logger.debug(f"Error getting status for Gen1 device {device.id}: {str(e)}")
+        
+        # Try to get Shelly info
+        try:
+            url = f"http://{device.ip_address}/shelly"
+            async with self.session.get(url, timeout=5) as response:
+                if response.status == 200:
+                    info = await response.json()
+                    
+                    # Process each info field
+                    for key, value in info.items():
+                        result[key] = {
+                            "type": self._infer_parameter_type(value),
+                            "description": f"Parameter {key}",
+                            "api": "shelly",
+                            "read_only": False,  # Some Shelly info might be writable
+                            "value": value
+                        }
+        except Exception as e:
+            logger.debug(f"Error getting Shelly info for Gen1 device {device.id}: {str(e)}")
+            
+        return result
+    
+    async def _get_gen2_basic_parameters(self, device: Device) -> Dict[str, Dict[str, Any]]:
+        """Get basic parameters from a Gen2 device without warnings."""
+        result = {}
+        
+        # RPC methods to try
+        methods = ["Shelly.GetStatus", "Shelly.GetConfig"]
+        
+        for method in methods:
+            try:
+                url = f"http://{device.ip_address}/rpc"
+                payload = {
+                    "id": 1,
+                    "src": "shelly-bulk-control",
+                    "method": method,
+                    "params": {}
+                }
+                
+                async with self.session.post(url, json=payload, timeout=5) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        if "result" in data:
+                            # Flatten the result structure
+                            self._flatten_json(data["result"], "", result, method)
+            except Exception as e:
+                logger.debug(f"Error calling {method} for Gen2 device {device.id}: {str(e)}")
+                
+        return result
+    
+    def _flatten_json(self, json_obj: Dict[str, Any], prefix: str, result: Dict[str, Dict[str, Any]], method: str):
+        """
+        Flatten a nested JSON object into parameter entries.
+        
+        Args:
+            json_obj: The JSON object to flatten
+            prefix: Current prefix for nested keys
+            result: Result dictionary to update
+            method: The RPC method that was called
+        """
+        for key, value in json_obj.items():
+            new_key = f"{prefix}.{key}" if prefix else key
+            
+            if isinstance(value, dict):
+                # Recursively flatten nested objects
+                self._flatten_json(value, new_key, result, method)
+            else:
+                # Add leaf values as parameters
+                is_status = "Status" in method
+                result[new_key] = {
+                    "type": self._infer_parameter_type(value),
+                    "description": f"Parameter {new_key}",
+                    "api": method,
+                    "read_only": is_status,  # Status values are read-only
+                    "value": value
+                }
+    
+    def _get_common_parameters_for_device_type(self, device_type: str) -> List[str]:
+        """
+        Get a list of common parameters that are likely to be supported by a device type.
+        
+        Args:
+            device_type: The device type
+            
+        Returns:
+            List of parameter names
+        """
+        # Get standard parameters from parameter manager
+        common_params = []
+        for param in parameter_manager.get_all_common_parameters():
+            common_params.append(param.name)
+            
+        # Add basic device parameters that are commonly available
+        basic_params = [
+            "name", "type", "mac", "ip", "fw", "eco_mode", "cloud.enabled",
+            "led_status_disable", "mqtt.enable", "mqtt.server"
+        ]
+        
+        return list(set(common_params + basic_params))
+    
+    def _infer_parameter_type(self, value: Any) -> str:
+        """Infer the parameter type from its value."""
+        if isinstance(value, bool):
+            return "boolean"
+        elif isinstance(value, int):
+            return "integer"
+        elif isinstance(value, float):
+            return "float"
+        elif isinstance(value, dict):
+            return "object"
+        elif isinstance(value, list):
+            return "array"
+        else:
+            return "string"
+    
+    async def get_parameter_value(self, device: Device, parameter_name: str, log_warnings: bool = True) -> Tuple[bool, Any]:
         """
         Get the current value of a parameter from a device.
         
         Args:
             device: The device to get the parameter from
             parameter_name: The name of the parameter
+            log_warnings: Whether to log warnings if parameter is not found
             
         Returns:
             Tuple of (success, value)
@@ -226,16 +409,17 @@ class ParameterService:
         try:
             # Choose appropriate method based on device generation
             if device.generation == DeviceGeneration.GEN1:
-                return await self._get_gen1_parameter(device, parameter_name, capability)
+                return await self._get_gen1_parameter(device, parameter_name, capability, log_warnings)
             else:
-                return await self._get_gen2_parameter(device, parameter_name, capability)
+                return await self._get_gen2_parameter(device, parameter_name, capability, log_warnings)
                 
         except Exception as e:
             logger.error(f"Error getting parameter {parameter_name} from device {device.id}: {str(e)}")
             return False, None
     
     async def _get_gen1_parameter(self, device: Device, parameter_name: str, 
-                                 capability: Optional[DeviceCapability]) -> Tuple[bool, Any]:
+                                 capability: Optional[DeviceCapability],
+                                 log_warnings: bool = True) -> Tuple[bool, Any]:
         """
         Get a parameter from a Gen1 device.
         
@@ -243,6 +427,7 @@ class ParameterService:
             device: The device
             parameter_name: Parameter name
             capability: Optional device capability
+            log_warnings: Whether to log warnings if parameter is not found
             
         Returns:
             Tuple of (success, value)
@@ -269,11 +454,13 @@ class ParameterService:
                                 if part in value:
                                     value = value[part]
                                 else:
-                                    logger.warning(f"Parameter part '{part}' not found in response for {parameter_name}")
+                                    if log_warnings:
+                                        logger.warning(f"Parameter part '{part}' not found in response for {parameter_name}")
                                     return False, None
                             return True, value
                         except (KeyError, TypeError):
-                            logger.warning(f"Could not extract parameter {parameter_name} from response")
+                            if log_warnings:
+                                logger.warning(f"Could not extract parameter {parameter_name} from response")
                             return False, None
                     else:
                         logger.error(f"Error getting parameter from {url}: HTTP {response.status}")
@@ -315,11 +502,13 @@ class ParameterService:
             pass
             
         # Parameter not found
-        logger.warning(f"Parameter {parameter_name} not found for Gen1 device {device.id}")
+        if log_warnings:
+            logger.warning(f"Parameter {parameter_name} not found for Gen1 device {device.id}")
         return False, None
     
     async def _get_gen2_parameter(self, device: Device, parameter_name: str, 
-                                 capability: Optional[DeviceCapability]) -> Tuple[bool, Any]:
+                                 capability: Optional[DeviceCapability],
+                                 log_warnings: bool = True) -> Tuple[bool, Any]:
         """
         Get a parameter from a Gen2/Gen3 device.
         
@@ -327,6 +516,7 @@ class ParameterService:
             device: The device
             parameter_name: Parameter name
             capability: Optional device capability
+            log_warnings: Whether to log warnings if parameter is not found
             
         Returns:
             Tuple of (success, value)
@@ -374,11 +564,13 @@ class ParameterService:
                                         if part in current:
                                             current = current[part]
                                         else:
-                                            logger.warning(f"Path part '{part}' not found in response")
+                                            if log_warnings:
+                                                logger.warning(f"Path part '{part}' not found in response")
                                             return False, None
                                     return True, current
                                 except (KeyError, TypeError):
-                                    logger.warning(f"Could not extract parameter from RPC response")
+                                    if log_warnings:
+                                        logger.warning(f"Could not extract parameter from RPC response")
                                     return False, None
                             
                             # Otherwise return the entire result
@@ -465,7 +657,8 @@ class ParameterService:
             pass
             
         # Parameter not found
-        logger.warning(f"Parameter {parameter_name} not found for Gen2/Gen3 device {device.id}")
+        if log_warnings:
+            logger.warning(f"Parameter {parameter_name} not found for Gen2/Gen3 device {device.id}")
         return False, None
     
     async def set_parameter_value(self, device: Device, parameter_name: str, value: Any, auto_restart: bool = False) -> Tuple[bool, Optional[Dict]]:
@@ -529,14 +722,25 @@ class ParameterService:
         """
         # Determine API endpoint from capability if available
         api_path = None
+        gen1_parameter_name = parameter_name
+        
+        # Map standard parameter names to Gen1-specific names if needed
+        if parameter_name == "eco_mode":
+            gen1_parameter_name = "eco_mode_enabled"
+        elif parameter_name in parameter_manager.standard_to_gen1:
+            gen1_parameter_name = parameter_manager.standard_to_gen1[parameter_name]
+            
         if capability:
-            param_details = capability.get_parameter_details(parameter_name)
+            param_details = capability.get_parameter_details(gen1_parameter_name)
             if param_details:
                 api_path = param_details.get("api")
                 # Check if parameter is read-only
                 if param_details.get("read_only", False):
-                    logger.warning(f"Cannot set read-only parameter {parameter_name} on device {device.id}")
+                    logger.warning(f"Cannot set read-only parameter {gen1_parameter_name} on device {device.id}")
                     return False, {"error": "Parameter is read-only"}
+        
+        # Format value properly for Gen1 devices
+        formatted_value = self._format_value_for_gen1(gen1_parameter_name, value)
         
         # For Gen1 devices, most settings are set via /settings endpoint
         url = f"http://{device.ip_address}/settings"
@@ -560,9 +764,10 @@ class ParameterService:
                             return False, {"error": f"HTTP error {response.status}"}
                 
         # Default approach: use settings endpoint
-        params = {parameter_name: value}
+        params = {gen1_parameter_name: formatted_value}
         
         try:
+            logger.debug(f"Setting Gen1 parameter {gen1_parameter_name} = {formatted_value} for device {device.id}")
             async with self.session.get(url, params=params, timeout=5) as response:
                 if response.status == 200:
                     data = await response.json()
@@ -573,6 +778,20 @@ class ParameterService:
         except Exception as e:
             logger.error(f"Error accessing Gen1 settings API: {str(e)}")
             return False, {"error": str(e)}
+    
+    def _format_value_for_gen1(self, parameter_name: str, value: Any) -> str:
+        """Format a value for Gen1 devices."""
+        # Format boolean values correctly
+        if isinstance(value, bool):
+            # For eco_mode specifically, use true/false instead of on/off
+            if parameter_name == "eco_mode" or parameter_name == "eco_mode_enabled":
+                return "true" if value else "false"
+            else:
+                return "on" if value else "off"
+        elif isinstance(value, (int, float)):
+            return str(value)
+        else:
+            return str(value)
     
     async def _set_gen2_parameter(self, device: Device, parameter_name: str, value: Any, 
                                  capability: Optional[DeviceCapability]) -> Tuple[bool, Optional[Dict]]:

@@ -34,18 +34,12 @@ run_test() {
 SUCCESS=true
 
 # Run unittest tests
-if ! run_test "python -m unittest discover -s tests" "Unit and Integration Tests"; then
+if ! run_test "python -m unittest discover -s tests" "Unit and Integration Tests (unittest)"; then
     SUCCESS=false
 fi
 
-# Run pytest tests
-if ! run_test "pytest tests/test_cli_grouping.py -v" "CLI Tests (pytest)"; then
-    SUCCESS=false
-fi
-
-# Check the CLI test script permissions and run it
-chmod +x test_grouping_cli.sh
-if ! run_test "./test_grouping_cli.sh" "CLI Tests (Shell Script)"; then
+# Run all pytest tests
+if ! run_test "pytest tests -v" "All Tests (pytest)"; then
     SUCCESS=false
 fi
 

@@ -5,6 +5,7 @@ import asyncio
 import sys
 import logging
 import argparse
+import pytest
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -28,15 +29,24 @@ log_config.setup()
 logger = logging.getLogger("test_direct_group_operations")
 
 
-async def test_direct_group_operations(group_name: str, ip_address: str = None, operation_delay: int = 2):
+@pytest.fixture
+def test_group_name():
+    """Fixture to provide a test group name."""
+    return "test_group"
+
+
+@pytest.mark.asyncio
+async def test_direct_group_operations(test_group_name):
     """
     Test group operations functionality by directly accessing devices.
     
     Args:
-        group_name: Name of the group to test
-        ip_address: Optional IP address for a specific device to use
-        operation_delay: Delay in seconds between operations
+        test_group_name: Name of the group to test from fixture
     """
+    # Use default values for optional parameters
+    ip_address = None
+    operation_delay = 2
+    
     logger.info("Starting direct group operations test")
     
     # Initialize the group manager
@@ -48,17 +58,19 @@ async def test_direct_group_operations(group_name: str, ip_address: str = None, 
     
     if not groups:
         logger.warning("No groups found. Please create a group first.")
+        pytest.skip("No groups found for testing")
         return
     
     # Select the target group
     target_group = None
     for group in groups:
-        if group.name == group_name:
+        if group.name == test_group_name:
             target_group = group
             break
     
     if not target_group:
-        logger.warning(f"Group '{group_name}' not found.")
+        logger.warning(f"Group '{test_group_name}' not found.")
+        pytest.skip(f"Test group '{test_group_name}' not found")
         return
     
     logger.info(f"Testing with group: {target_group.name}")
@@ -71,6 +83,7 @@ async def test_direct_group_operations(group_name: str, ip_address: str = None, 
         # Create a device with the provided IP, use the first device ID from the group
         if not target_group.device_ids:
             logger.warning(f"Group '{target_group.name}' has no device IDs")
+            pytest.skip(f"Group '{target_group.name}' has no device IDs")
             return
             
         device_id = target_group.device_ids[0]
@@ -97,6 +110,7 @@ async def test_direct_group_operations(group_name: str, ip_address: str = None, 
     
     if not devices:
         logger.warning("No devices found for testing")
+        pytest.skip("No devices found for testing")
         return
     
     logger.info(f"Found {len(devices)} devices to test with")
@@ -177,6 +191,7 @@ async def test_direct_group_operations(group_name: str, ip_address: str = None, 
     logger.info("Group operations test completed")
 
 
+# The following functions are for command-line usage, not for pytest
 def parse_args():
     """Parse command-line arguments."""
     parser = argparse.ArgumentParser(description="Test direct group operations functionality")
@@ -189,7 +204,7 @@ def parse_args():
 if __name__ == "__main__":
     args = parse_args()
     try:
-        asyncio.run(test_direct_group_operations(args.group, args.ip, args.delay))
+        asyncio.run(test_direct_group_operations(args.group))
     except KeyboardInterrupt:
         logger.info("Test interrupted by user")
     except Exception as e:

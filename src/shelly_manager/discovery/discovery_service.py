@@ -419,146 +419,6 @@ class DiscoveryService:
             logger.error(f"Error parsing response from {ip}: {e}")
             return None
 
-    async def _get_gen1_settings(self, ip: str, device: Device) -> Device:
-
-        """Get additional settings for Gen1 devices and check firmware update status"""
-        if not self._session:
-            return device
-
-        try:
-            # First get device settings
-            url = f"http://{ip}/settings"
-            logger.debug(f"Getting settings from {url}")
-            async with self._session.get(url, timeout=8) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.debug(f"Received settings from {ip}: {data}")
-                    
-                    # Update device with settings information
-                    device.name = data.get("name", "")  # Get name directly from root level
-                    device.hostname = data.get("device", {}).get("hostname")
-                    device.timezone = data.get("timezone")
-                    device.location = {
-                        "lat": data.get("lat"),
-                        "lng": data.get("lng")
-                    } if "lat" in data and "lng" in data else None
-                    
-                    # WiFi information
-                    wifi_sta = data.get("wifi_sta", {})
-                    device.wifi_ssid = wifi_sta.get("ssid") if wifi_sta.get("enabled") else None
-                    
-                    # Cloud status
-                    cloud = data.get("cloud", {})
-                    device.cloud_enabled = cloud.get("enabled")
-                    device.cloud_connected = cloud.get("connected")
-                    
-                    # MQTT information
-                    mqtt = data.get("mqtt", {})
-                    device.mqtt_enabled = mqtt.get("enable")
-                    device.mqtt_server = mqtt.get("server")
-                    
-                    # Device specific information
-                    device_info = data.get("device", {})
-                    device.num_outputs = device_info.get("num_outputs")
-                    device.num_meters = device_info.get("num_meters")
-                    device.max_power = data.get("max_power")
-                    
-                    # Check for eco mode
-                    device.eco_mode_enabled = data.get("eco_mode_enabled", False)
-                    
-                    logger.debug(f"Updated Gen1 device with settings: {device}")
-                    
-            # Now check for firmware update status by querying the /status endpoint
-            url = f"http://{ip}/status"
-            logger.debug(f"Getting status from {url}")
-            
-            async with self._session.get(url, timeout=8) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.debug(f"Received status from {ip}: {data}")
-                    
-                    # Check update status - Gen1 devices use the 'update' field
-                    if "update" in data:
-                        update_info = data.get("update", {})
-                        device.has_update = update_info.get("has_update", False)
-                        
-                        logger.debug(f"Firmware update available: {device.has_update}")
-                        if device.has_update:
-                            logger.info(f"Firmware update available for {device.name} ({ip}): "
-                                       f"Current: {update_info.get('old_version', 'unknown')}, "
-                                       f"New: {update_info.get('new_version', 'unknown')}")
-                    
-                    # Double-check eco mode if not found in settings
-                    if not hasattr(device, 'eco_mode_enabled') or device.eco_mode_enabled is None:
-                        device.eco_mode_enabled = data.get("eco_mode", {}).get("enabled", False)
-                        
-        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            logger.debug(f"Failed to get settings/status for {ip}: {str(e)}")
-        except Exception as e:
-            logger.debug(f"Unexpected error getting settings/status for {ip}: {str(e)}")
-        
-        return device
-
-    async def _get_gen2_config(self, ip: str, device: Device) -> Device:
-        """Get additional configuration for Gen2+ devices"""
-        if not self._session:
-            return device
-
-        try:
-            url = f"http://{ip}/rpc/Shelly.GetConfig"
-            logger.debug(f"Getting config from {url}")
-            
-            async with self._session.post(url, json={}, timeout=8) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.debug(f"Received config from {ip}: {data}")
-                    
-                    # System information
-                    sys = data.get("sys", {})
-                    sys_device = sys.get("device", {})
-                    device.name = sys_device.get("name")  # Get name directly from device config
-                    device.hostname = sys_device.get("name")  # Use name as hostname for Gen2+
-                    device.eco_mode_enabled = sys_device.get("eco_mode", False)
-                    
-                    # Location information
-                    sys_location = sys.get("location", {})
-                    device.timezone = sys_location.get("tz")
-                    device.location = {
-                        "lat": sys_location.get("lat"),
-                        "lng": sys_location.get("lon")
-                    } if "lat" in sys_location and "lon" in sys_location else None
-                    
-                    # WiFi information
-                    wifi = data.get("wifi", {})
-                    wifi_sta = wifi.get("sta", {})
-                    device.wifi_ssid = wifi_sta.get("ssid") if wifi_sta.get("enable") else None
-                    
-                    # Cloud status
-                    cloud = data.get("cloud", {})
-                    device.cloud_enabled = cloud.get("enable", False)
-                    device.cloud_connected = bool(cloud.get("server"))  # If server is set, device is connected
-                    
-                    # MQTT information
-                    mqtt = data.get("mqtt", {})
-                    device.mqtt_enabled = mqtt.get("enable", False)
-                    device.mqtt_server = mqtt.get("server")
-                    
-                    # Find the first switch config if available
-                    for key in data:
-                        if key.startswith("switch:") or key.startswith("cover:"):
-                            switch_data = data.get(key, {})
-                            if "power_limit" in switch_data:
-                                device.max_power = switch_data.get("power_limit")
-                                break
-                    
-                    logger.debug(f"Updated Gen2+ device with config: {device}")
-        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            logger.debug(f"Failed to get config for {ip}: {str(e)}")
-        except Exception as e:
-            logger.debug(f"Unexpected error getting config for {ip}: {str(e)}")
-        
-        return device
-
     def _save_device_info(self, device: Device):
         """Save discovered device information to a file"""
         try:
@@ -949,30 +809,10 @@ class DiscoveryService:
             try:
                 if device.generation == DeviceGeneration.GEN1:
                     logger.debug(f"Detected Gen1 device at {ip}, getting additional settings")
-                    device = await self._get_gen1_settings(ip, device)
+                    device = await self._get_gen1_details(ip, device)
                 else:  # Gen2+ devices
-                    logger.debug(f"Detected Gen2/Gen3 device at {ip}, getting device info")
-                    
-                    # First try GetDeviceInfo (more comprehensive)
-                    success = await self._get_gen2_device_info(ip, device)
-                    if not success:
-                        # Fall back to GetConfig if GetDeviceInfo fails
-                        logger.debug(f"GetDeviceInfo failed for {ip}, trying GetConfig")
-                        device = await self._get_gen2_config(ip, device)
-                        
-                    # Check for eco mode
-                    await self._check_gen2_status_for_eco_mode(ip, device)
-                    
-                    # If eco mode not found in status, check config
-                    if device.eco_mode_enabled is None:
-                        await self._check_gen2_config_for_eco_mode(ip, device)
-
-                # Make sure eco_mode_enabled is set to a boolean value
-                if not hasattr(device, 'eco_mode_enabled') or device.eco_mode_enabled is None:
-                    logger.info(f"Eco mode not detected for {ip}, setting to False")
-                    device.eco_mode_enabled = False
-                else:
-                    logger.info(f"Final eco mode setting for {ip}: {device.eco_mode_enabled}")
+                    logger.debug(f"Detected Gen2/Gen3/Gen4 device at {ip}, getting device info")
+                    device = await self._get_gen2plus_details(ip, device)
 
                 # Log the discovered device
                 logger.debug(f"Discovered device via {device.discovery_method}: {device.id} ({ip})")
@@ -982,7 +822,6 @@ class DiscoveryService:
                 logger.debug(f"  Generation: {device.generation.value}")
                 logger.debug(f"  Firmware: {device.firmware_version}")
                 logger.debug(f"  Updates: {device.has_update}")
-                logger.debug(f"  Eco Mode: {device.eco_mode_enabled}")
                 
                 return device
             except Exception as e:
@@ -992,7 +831,7 @@ class DiscoveryService:
         
         logger.debug(f"No Shelly device found at {ip}")
         return None
-        
+
     async def _probe_shelly_endpoint(self, ip: str, max_retries: int = 1, retry_delay: int = 1) -> Optional[Device]:
         """Probe the /shelly endpoint to get basic device information"""
         for attempt in range(max_retries + 1):  # +1 for the initial attempt
@@ -1020,249 +859,180 @@ class DiscoveryService:
                 break
         
         return None
-        
-    async def _get_gen2_device_info(self, ip: str, device: Device) -> bool:
-        """Get Gen2 device information and update the Device object with additional details."""
+
+    async def _get_gen1_details(self, ip: str, device: Device) -> Device:
+        """Get comprehensive details for a Gen1 device"""
         if not self._session:
-            return False
+            return device
 
         try:
-            logger.debug(f"Starting _get_gen2_device_info for {ip}")
+            # Get settings
+            url = f"http://{ip}/settings"
+            logger.debug(f"Getting settings from {url}")
+            async with self._session.get(url, timeout=8) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    logger.debug(f"Received settings from {ip}: {data}")
+                    
+                    # Update device with settings information
+                    device.name = data.get("name", "")
+                    device.hostname = data.get("device", {}).get("hostname")
+                    device.timezone = data.get("timezone")
+                    device.location = {
+                        "lat": data.get("lat"),
+                        "lng": data.get("lng")
+                    } if "lat" in data and "lng" in data else None
+                    
+                    # WiFi information
+                    wifi_sta = data.get("wifi_sta", {})
+                    device.wifi_ssid = wifi_sta.get("ssid") if wifi_sta.get("enabled") else None
+                    
+                    # Cloud status
+                    cloud = data.get("cloud", {})
+                    device.cloud_enabled = cloud.get("enabled")
+                    device.cloud_connected = cloud.get("connected")
+                    
+                    # MQTT information
+                    mqtt = data.get("mqtt", {})
+                    device.mqtt_enabled = mqtt.get("enable")
+                    device.mqtt_server = mqtt.get("server")
+                    
+                    # Device specific information from settings
+                    device_info = data.get("device", {})
+                    device.num_outputs = device_info.get("num_outputs")
+                    device.num_meters = device_info.get("num_meters")
+                    device.max_power = data.get("max_power")
+                    
+            # Check firmware update status
+            url = f"http://{ip}/status"
+            logger.debug(f"Getting status from {url}")
+            
+            async with self._session.get(url, timeout=8) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    logger.debug(f"Received status from {ip}: {data}")
+                    
+                    # Check update status
+                    if "update" in data:
+                        update_info = data.get("update", {})
+                        device.has_update = update_info.get("has_update", False)
+                        
+                        if device.has_update:
+                            logger.info(f"Firmware update available for {device.name} ({ip}): "
+                                      f"Current: {update_info.get('old_version', 'unknown')}, "
+                                      f"New: {update_info.get('new_version', 'unknown')}")
+                        
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.debug(f"Failed to get Gen1 details for {ip}: {str(e)}")
+        except Exception as e:
+            logger.debug(f"Unexpected error getting Gen1 details for {ip}: {str(e)}")
+        
+        return device
+
+    async def _get_gen2plus_details(self, ip: str, device: Device) -> Device:
+        """Get comprehensive details for Gen2+ devices"""
+        if not self._session:
+            return device
+
+        try:
+            # First try GetDeviceInfo (more comprehensive)
             url = f"http://{ip}/rpc/Shelly.GetDeviceInfo"
-            logger.debug(f"Getting Gen2 device info from {url}")
+            logger.debug(f"Getting device info from {url}")
 
             async with self._session.post(url, json={}, timeout=8) as response:
                 if response.status == 200:
                     data = await response.json()
-                    logger.debug(f"[DEVICE INFO] {ip}: {data}")
+                    logger.debug(f"Received device info from {ip}: {data}")
 
-                    # Update the device with information from GetDeviceInfo
+                    # Update device with information from GetDeviceInfo
                     if "name" in data:
                         device.name = data["name"]
                     if "id" in data:
                         device.id = data["id"]
                     if "mac" in data:
-                        device.mac_address = self._format_mac(data["mac"]) 
+                        device.mac_address = data["mac"]
                     if "model" in data:
                         device.model = data["model"]
-                        logger.debug(f"Device model: {device.model}")
                     if "fw_version" in data:
                         device.firmware_version = data["fw_version"]
-                        logger.debug(f"Device firmware version: {device.firmware_version}")
+            
+            # Get config information
+            url = f"http://{ip}/rpc/Shelly.GetConfig"
+            logger.debug(f"Getting config from {url}")
+            
+            async with self._session.post(url, json={}, timeout=8) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    logger.debug(f"Received config from {ip}: {data}")
+                    
+                    # System information
+                    sys = data.get("sys", {})
+                    sys_device = sys.get("device", {})
+                    
+                    # If name wasn't in device info, get it from config
+                    if not device.name and "name" in sys_device:
+                        device.name = sys_device.get("name")
+                    
+                    device.hostname = sys_device.get("name")  # Use name as hostname for Gen2+
+                    
+                    # Location information
+                    sys_location = sys.get("location", {})
+                    device.timezone = sys_location.get("tz")
+                    device.location = {
+                        "lat": sys_location.get("lat"),
+                        "lng": sys_location.get("lon")
+                    } if "lat" in sys_location and "lon" in sys_location else None
+                    
+                    # WiFi information
+                    wifi = data.get("wifi", {})
+                    wifi_sta = wifi.get("sta", {})
+                    device.wifi_ssid = wifi_sta.get("ssid") if wifi_sta.get("enable") else None
+                    
+                    # Cloud status
+                    cloud = data.get("cloud", {})
+                    device.cloud_enabled = cloud.get("enable", False)
+                    device.cloud_connected = bool(cloud.get("server"))  # If server is set, device is connected
+                    
+                    # MQTT information
+                    mqtt = data.get("mqtt", {})
+                    device.mqtt_enabled = mqtt.get("enable", False)
+                    device.mqtt_server = mqtt.get("server")
+            
+            # Check status and update information
+            url = f"http://{ip}/rpc/Shelly.GetStatus"
+            logger.debug(f"Getting status from {url}")
+            
+            async with self._session.post(url, json={}, timeout=8) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    logger.debug(f"Received status from {ip}: {data}")
                     
                     # Check for updates
-                    await self._check_gen2_update_status(ip, device)
-                    
-                    logger.debug(f"Final device info: {device.id} ({ip}), "
-                               f"Type: {device.model}, FW: {device.firmware_version}, "
-                               f"Updates: {device.has_update}, Eco Mode: {device.eco_mode_enabled}")
-                    
-                    return True
-                else:
-                    logger.debug(f"Failed to get Gen2 device info: {response.status}")
-                    return False
-        except Exception as e:
-            logger.debug(f"Error getting Gen2 device info: {e}")
-            return False
-
-    async def _check_gen2_update_status(self, ip: str, device: Device) -> None:
-        """Check if a Gen2 device has firmware updates available"""
-        if not self._session:
-            return
-            
-        try:
-            # Known outdated firmware versions - these should eventually come from device_types.yaml
-            known_outdated_firmware = {
-                "SNSW-001P8EU": {"version": "1.3.3", "update_to": "1.4.4"}
-            }
-            
-            # Check for known outdated firmware first
-            if device.model in known_outdated_firmware and device.firmware_version == known_outdated_firmware[device.model]["version"]:
-                update_to = known_outdated_firmware[device.model]["update_to"]
-                logger.info(f"Known outdated firmware detected for {device.model}: {device.firmware_version} -> {update_to}")
-                device.has_update = True
-                return
-                
-            url = f"http://{ip}/rpc/Shelly.GetStatus"
-            logger.debug(f"Checking update status from {url}")
-            
-            async with self._session.post(url, json={}, timeout=8) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.debug(f"[STATUS DATA] {ip}: {data}")
-                    
-                    # PRIMARY CHECK: First check sys.available_updates which is most reliable
                     if "sys" in data and "available_updates" in data["sys"]:
                         available_updates = data["sys"]["available_updates"]
-                        logger.debug(f"Found sys.available_updates: {available_updates}")
                         
                         # Only consider stable updates, ignore beta updates
-                        has_update = "stable" in available_updates
+                        device.has_update = "stable" in available_updates
                         
-                        if has_update:
+                        if device.has_update:
                             stable_version = available_updates.get("stable", {}).get("version")
                             logger.info(f"Stable update available for {device.name or device.id} ({ip}): {stable_version}")
-                        
-                        # Log beta updates but don't count them as requiring an update
-                        if "beta" in available_updates:
-                            beta_version = available_updates.get("beta", {}).get("version")
-                            logger.debug(f"Beta update available (ignored): {beta_version}")
-                        
-                        device.has_update = has_update
-                        return  # We found definitive update info, no need to check other sources
                     
-                    # SECONDARY CHECK: Only check cloud.available_updates if sys.available_updates not present
-                    if "cloud" in data and "available_updates" in data["cloud"]:
+                    # Fallback check if sys.available_updates not present
+                    elif "cloud" in data and "available_updates" in data["cloud"]:
                         available_updates = data["cloud"]["available_updates"]
-                        logger.debug(f"Found cloud.available_updates: {available_updates}")
+                        device.has_update = "stable" in available_updates
                         
-                        # Only consider stable updates
-                        has_update = "stable" in available_updates
+                    # Second fallback for older firmware
+                    elif "cloud" in data and "new_fw" in data["cloud"]:
+                        device.has_update = bool(data["cloud"]["new_fw"])
                         
-                        if has_update:
-                            stable_version = available_updates.get("stable", {}).get("version")
-                            logger.info(f"Stable update available in cloud.available_updates: {stable_version}")
-                        
-                        device.has_update = has_update
-                        return
-                    
-                    # FALLBACK CHECK: Look for new_fw field
-                    if "cloud" in data and "new_fw" in data["cloud"]:
-                        has_update = bool(data["cloud"]["new_fw"])
-                        logger.debug(f"Update status from cloud.new_fw: {has_update}")
-                        device.has_update = has_update
-                        return
-                        
-                    # No update sources found
-                    logger.debug(f"No update information found for {ip}")
-                    device.has_update = False
-                else:
-                    logger.debug(f"Non-200 response from {url}: {response.status}")
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.debug(f"Failed to get Gen2+ details for {ip}: {str(e)}")
         except Exception as e:
-            logger.debug(f"Error checking update status for {ip}: {e}")
-            return
-
-    async def _check_gen2_config_for_eco_mode(self, ip: str, device: Device) -> None:
-        """Check Gen2 device config for eco mode settings"""
-        if not self._session:
-            return
-            
-        try:
-            url = f"http://{ip}/rpc/Shelly.GetConfig"
-            logger.debug(f"Getting config from {url} to check for eco mode")
-            
-            async with self._session.post(url, json={}, timeout=8) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.debug(f"[CONFIG DATA] {ip}: {data}")
-                    
-                    # PRIORITY 1: Check sys.device.eco_mode first (most common location)
-                    if "sys" in data and "device" in data["sys"] and "eco_mode" in data["sys"]["device"]:
-                        device.eco_mode_enabled = bool(data["sys"]["device"].get("eco_mode", False))
-                        logger.debug(f"Eco mode found in sys.device.eco_mode: {device.eco_mode_enabled}")
-                        return
-                    
-                    # PRIORITY 2: Check at the root level
-                    if "eco_mode" in data:
-                        device.eco_mode_enabled = bool(data.get("eco_mode", False))
-                        logger.debug(f"Eco mode found at config root level: {device.eco_mode_enabled}")
-                        return
-                        
-                    # PRIORITY 3: Check switch sections
-                    for key in data:
-                        if key.startswith("switch:"):
-                            switch_data = data.get(key, {})
-                            logger.debug(f"[SWITCH CONFIG] {ip} {key}: {switch_data}")
-                            if "eco_mode" in switch_data:
-                                device.eco_mode_enabled = bool(switch_data.get("eco_mode", False))
-                                logger.debug(f"Eco mode found in switch config {key}: {device.eco_mode_enabled}")
-                                return
-                            
-                    # PRIORITY 4: As a last resort, recursively search the entire config
-                    logger.debug(f"Searching entire config for eco_mode for {ip}")
-                    
-                    def find_eco_mode(obj, path=""):
-                        if isinstance(obj, dict):
-                            if "eco_mode" in obj:
-                                value = bool(obj.get("eco_mode", False))
-                                logger.debug(f"Found eco_mode at path {path}: {value}")
-                                return value
-                            for key, value in obj.items():
-                                if isinstance(value, (dict, list)):
-                                    result = find_eco_mode(value, path + "." + key if path else key)
-                                    if result is not None:
-                                        return result
-                        elif isinstance(obj, list):
-                            for i, item in enumerate(obj):
-                                if isinstance(item, (dict, list)):
-                                    result = find_eco_mode(item, f"{path}[{i}]")
-                                    if result is not None:
-                                        return result
-                        return None
-                    
-                    eco_mode = find_eco_mode(data)
-                    if eco_mode is not None:
-                        device.eco_mode_enabled = eco_mode
-                        logger.debug(f"Eco mode found in config (nested search): {device.eco_mode_enabled}")
-                    else:
-                        logger.debug(f"No eco mode found in config for {ip}")
-                else:
-                    logger.debug(f"Non-200 response from {url}: {response.status}")
-        except Exception as e:
-            logger.debug(f"Error checking config for eco mode for {ip}: {e}")
-            return
-
-    async def _check_gen2_status_for_eco_mode(self, ip: str, device: Device) -> None:
-        """Check the GetStatus response for eco mode settings"""
-        if not self._session:
-            return
-            
-        try:
-            url = f"http://{ip}/rpc/Shelly.GetStatus"
-            logger.debug(f"Checking eco mode in status from {url}")
-            
-            async with self._session.post(url, json={}, timeout=8) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    logger.debug(f"Checking for eco mode in status data")
-                    
-                    found_eco_mode = False
-                    
-                    # Try to find eco mode at root level
-                    if "eco_mode" in data:
-                        device.eco_mode_enabled = bool(data.get("eco_mode", False))
-                        found_eco_mode = True
-                        logger.debug(f"Found eco_mode at root level in status: {device.eco_mode_enabled}")
-                    
-                    # Try to find eco mode in sys.device 
-                    if not found_eco_mode and "sys" in data and "device" in data["sys"]:
-                        sys_device = data["sys"]["device"]
-                        logger.debug(f"[SYS.DEVICE] {ip}: {sys_device}")
-                        
-                        if "eco_mode" in sys_device:
-                            device.eco_mode_enabled = bool(sys_device.get("eco_mode", False))
-                            found_eco_mode = True
-                            logger.debug(f"Found eco_mode in sys.device status: {device.eco_mode_enabled}")
-                    
-                    # Look for eco_mode in switch data
-                    if not found_eco_mode:
-                        for key in data:
-                            if key.startswith("switch:"):
-                                switch_data = data.get(key, {})
-                                logger.debug(f"[SWITCH DATA] {ip} {key}: {switch_data}")
-                                if "eco_mode" in switch_data:
-                                    device.eco_mode_enabled = bool(switch_data.get("eco_mode", False))
-                                    found_eco_mode = True
-                                    logger.debug(f"Found eco_mode in {key} status: {device.eco_mode_enabled}")
-                                    break
-                    
-                    if not found_eco_mode:
-                        logger.debug(f"No eco mode found in status data for {ip}")
-                else:
-                    logger.debug(f"Non-200 response from {url}: {response.status}")
-        except Exception as e:
-            logger.debug(f"Error checking status for eco mode for {ip}: {e}")
-            return
+            logger.debug(f"Unexpected error getting Gen2+ details for {ip}: {str(e)}")
+        
+        return device
 
     def _get_sorted_devices(self) -> List[Device]:
         """Return devices sorted by IP address"""

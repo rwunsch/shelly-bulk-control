@@ -15,6 +15,8 @@ A powerful tool for discovering, managing, and controlling multiple Shelly devic
 - **Device Capabilities**: Automatically detect device capabilities and supported features
 - **Parameter Mapping**: Unified parameter interface across different device generations
 - **Automated Configuration**: Apply consistent settings across device groups
+- **REST API Service**: Run as a continuous service with full REST API capabilities
+- **Client Libraries**: Python client library for API integration
 
 ## Installation
 
@@ -173,6 +175,66 @@ shelly-manager parameters apply living_room eco_mode true
 # Set parameter and reboot devices if needed
 shelly-manager parameters apply living_room eco_mode true --reboot
 ```
+
+## Running as a Service
+
+Shelly Manager can run as a continuous service with a REST API, which is useful for integration with other systems or building custom user interfaces.
+
+### Starting the API Service
+
+```bash
+# Start the API service with default settings
+./scripts/run_api_server.py
+
+# Start with a custom configuration file
+./scripts/run_api_server.py --config=/path/to/config.ini
+
+# Start with custom host and port
+./scripts/run_api_server.py --host=192.168.1.100 --port=9000
+
+# Start in development mode with hot-reload
+./scripts/start_api_dev.sh
+```
+
+### Using Docker
+
+```bash
+# Build and start the service using Docker Compose
+cd docker
+docker-compose up -d
+
+# Check logs
+docker logs shelly-manager-api
+
+# Stop the service
+docker-compose down
+```
+
+### Using the API Client
+
+A test client is included for interacting with the API:
+
+```bash
+# Get system status
+./scripts/test_api_client.py status
+
+# Trigger a device scan
+./scripts/test_api_client.py scan
+
+# Get all discovered devices
+./scripts/test_api_client.py devices
+
+# Create a device group
+./scripts/test_api_client.py create-group "LivingRoom" --device-ids "device1,device2"
+
+# Perform an operation on a group
+./scripts/test_api_client.py operate --group "LivingRoom" --operation "toggle"
+
+# Set parameters on a device with auto-reboot if needed
+./scripts/test_api_client.py set-params --device "device1" --params '{"eco_mode":true}' --reboot
+```
+
+For more details about the API service, see the [API documentation](./documentation/API_Service.md).
 
 ## Device Type Support
 

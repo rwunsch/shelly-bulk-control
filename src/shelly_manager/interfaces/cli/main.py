@@ -9,6 +9,7 @@ from ...discovery.discovery_service import DiscoveryService
 from ...models.device import Device
 from ...models.device_registry import device_registry
 from ...utils.logging import LogConfig, get_logger
+from ...config_manager.config_manager import ConfigManager
 import sys
 from rich.layout import Layout
 from rich.spinner import Spinner
@@ -38,11 +39,17 @@ logger = get_logger(__name__)
 
 # Global discovery service instance
 discovery_service = None
+# Global config manager instance
+config_manager = ConfigManager()
 
 def run_async(coro):
     """Run an async function in a synchronous context"""
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(coro)
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 def truncate_firmware(firmware_version: str) -> str:
     """Truncate firmware version to a reasonable length for display"""
@@ -208,22 +215,41 @@ def get_settings(device_id: str, debug: bool = typer.Option(False, help="Enable 
         logging.getLogger().setLevel(logging.DEBUG)
         console.print("[yellow]Debug mode enabled[/yellow]")
     
-    discovery_service = DiscoveryService(debug=debug)
+    # First try to get the device from registry
+    device = device_registry.get_device(device_id)
+    need_discovery = False
+    
+    if not device or not device.ip_address:
+        need_discovery = True
+        console.print("Device not found in registry or missing IP address. Starting discovery...", style="yellow")
+        discovery_service = DiscoveryService(debug=debug)
     
     async def _get_settings():
-        await discovery_service.start()
-        await asyncio.sleep(2)  # Wait for device discovery
+        # If we need to discover devices, do that first
+        if need_discovery:
+            await discovery_service.start()
+            await asyncio.sleep(2)  # Wait for device discovery
+            
+            # Try to find device by ID in discovered devices
+            devices = {d.id: d for d in discovery_service.devices}
+            if device_id not in devices:
+                console.print(f"Device {device_id} not found", style="red")
+                return None
+            
+            device_to_use = devices[device_id]
+        else:
+            # Use the device from registry
+            device_to_use = device
         
-        devices = {d.id: d for d in discovery_service.devices}
-        if device_id not in devices:
-            console.print(f"Device {device_id} not found", style="red")
-            return
-
+        # Get settings using config manager
         await config_manager.start()
-        settings = await config_manager.get_device_settings(devices[device_id])
-        await config_manager.stop()
-        await discovery_service.stop()
-        return settings
+        try:
+            settings = await config_manager.get_device_settings(device_to_use)
+            return settings
+        finally:
+            await config_manager.stop()
+            if need_discovery:
+                await discovery_service.stop()
 
     settings = run_async(_get_settings())
     if settings:
@@ -238,7 +264,14 @@ def set_settings(device_id: str, setting: list[str], debug: bool = typer.Option(
         logging.getLogger().setLevel(logging.DEBUG)
         console.print("[yellow]Debug mode enabled[/yellow]")
     
-    discovery_service = DiscoveryService(debug=debug)
+    # First try to get the device from registry
+    device = device_registry.get_device(device_id)
+    need_discovery = False
+    
+    if not device or not device.ip_address:
+        need_discovery = True
+        console.print("Device not found in registry or missing IP address. Starting discovery...", style="yellow")
+        discovery_service = DiscoveryService(debug=debug)
     
     settings = {}
     for s in setting:
@@ -247,22 +280,34 @@ def set_settings(device_id: str, setting: list[str], debug: bool = typer.Option(
             settings[key] = value
         except ValueError:
             console.print(f"Invalid setting format: {s}", style="red")
-            return
+            raise typer.Exit(1)
 
     async def _set_settings():
-        await discovery_service.start()
-        await asyncio.sleep(2)  # Wait for device discovery
+        # If we need to discover devices, do that first
+        if need_discovery:
+            await discovery_service.start()
+            await asyncio.sleep(2)  # Wait for device discovery
+            
+            # Try to find device by ID in discovered devices
+            devices = {d.id: d for d in discovery_service.devices}
+            if device_id not in devices:
+                console.print(f"Device {device_id} not found", style="red")
+                return False
+            
+            device_to_use = devices[device_id]
+        else:
+            # Use the device from registry
+            device_to_use = device
         
-        devices = {d.id: d for d in discovery_service.devices}
-        if device_id not in devices:
-            console.print(f"Device {device_id} not found", style="red")
-            return
-
+        # Apply settings using config manager
         await config_manager.start()
-        success = await config_manager.apply_settings(devices[device_id], settings)
-        await config_manager.stop()
-        await discovery_service.stop()
-        return success
+        try:
+            success = await config_manager.apply_settings(device_to_use, settings)
+            return success
+        finally:
+            await config_manager.stop()
+            if need_discovery:
+                await discovery_service.stop()
 
     if run_async(_set_settings()):
         console.print("Settings updated successfully", style="green")

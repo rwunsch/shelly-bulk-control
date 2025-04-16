@@ -315,12 +315,6 @@ class DiscoveryService:
                 # Fallback to a common home network - prefer 192.168.3.0/24 as indicated
                 network = "192.168.3.0/24"
                 logger.warning(f"Could not detect network, using default: {network}")
-        
-        # Detect if running in WSL to adjust discovery strategy
-        is_wsl = self._is_wsl() if hasattr(self, '_is_wsl') else False
-        if is_wsl:
-            logger.info("WSL detected, adjusting discovery strategy")
-            force_http = True
                 
         # Initialize aiohttp session for HTTP probing
         await self._ensure_session()
@@ -336,30 +330,37 @@ class DiscoveryService:
             logger.info(f"Probing specific IP addresses: {ip_addresses}")
             await self._probe_specific_ips(ip_addresses)
         else:
-            # Only start full discovery service if no specific IPs are provided
-            logger.info(f"Scanning network {network} for devices and discovering capabilities...")
-            
-            # Start mDNS discovery for general network scan
-            await self.start()
-            
-            # For normal discovery, we'll use both mDNS and HTTP scanning
-            # Start mDNS discovery first unless force_http is set or on WSL
-            if not force_http:
+            # Different approach based on discovery method
+            if force_http:
+                # Skip mDNS completely when force_http is set
+                logger.info(f"Force-HTTP mode: Scanning network {network} directly...")
+                await self._probe_network(network)
+            else:
+                # Use combined mDNS + HTTP approach
+                logger.info(f"Scanning network {network} for devices using mDNS...")
+                
+                # Start mDNS discovery for general network scan
+                await self.start()
+                
+                # Perform mDNS discovery
                 logger.info("Starting mDNS discovery")
                 await self._discover_mdns()
-            else:
-                logger.info("Skipping mDNS discovery due to force_http or WSL environment")
-            
-            # If mDNS didn't find any devices or we're forcing HTTP, do a network probe
-            if force_http or len(self._mdns_discovered_ips) == 0:
-                logger.info(f"Scanning network {network} for devices...")
-                await self._probe_network(network)
+                
+                # If mDNS didn't find any devices, fall back to network probe
+                if len(self._mdns_discovered_ips) == 0:
+                    logger.info(f"No devices found via mDNS, falling back to HTTP scan of network {network}...")
+                    await self._probe_network(network)
         
         # Process the discovery queue
         await self._process_discovery_queue()
         
-        # Stop the discovery service
-        await self.stop()
+        # Stop the discovery service if it was started
+        if not force_http and not ip_addresses:
+            await self.stop()
+        elif self._session:
+            # Just close the HTTP session if we're in force_http mode
+            await self._session.close()
+            self._session = None
         
         # Return list of discovered devices
         return self._get_sorted_devices()

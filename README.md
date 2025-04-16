@@ -180,6 +180,30 @@ shelly-manager parameters apply living_room eco_mode true --reboot
 - **Gen2**: PlusPlugS, Plus1PM, Plus2PM, Plus4PM, PlusHT, PlusI4, PlusUNI
 - **Gen3**: Mini1PMG3
 
+## Special Groups
+
+### All Devices Group
+
+The system provides a special dynamic group called `all-devices` which automatically includes all discovered devices on your network. This group is always available and doesn't need to be manually created.
+
+You can use it with any group operation command:
+
+```bash
+# Check status of all devices on the network
+python -m shelly_manager.interfaces.cli.main groups operate status all-devices
+
+# Turn off all devices
+python -m shelly_manager.interfaces.cli.main groups operate off all-devices
+
+# Check for firmware updates on all devices
+python -m shelly_manager.interfaces.cli.main groups operate check-updates all-devices
+
+# Update firmware on all devices with available updates
+python -m shelly_manager.interfaces.cli.main groups operate update-firmware all-devices
+```
+
+**Important Note**: When using the `all-devices` group, the system will display a warning and ask for confirmation before performing any operation, as these actions will affect ALL devices on your network.
+
 ## Documentation
 
 For more detailed documentation, see the [documentation](./documentation) folder.

@@ -13,6 +13,7 @@ from rich import box
 from shelly_manager.grouping.group_manager import GroupManager
 from shelly_manager.grouping.command_service import GroupCommandService
 from shelly_manager.utils.logging import LogConfig, get_logger
+from shelly_manager.models.device_registry import device_registry
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -103,6 +104,13 @@ async def _operate_group_async(group_name: str, action: str, parameters: Dict[st
             console.print(f"[red]Error:[/red] Group '{group_name}' not found")
             return
         
+        # Special warning for all-devices group
+        if group_name == "all-devices":
+            console.print(f"[yellow]Warning:[/yellow] You are about to operate on [bold]ALL devices[/bold] on your network!")
+            if not typer.confirm("Are you sure you want to continue?"):
+                console.print("Operation cancelled.")
+                return
+        
         # Execute the appropriate action
         if action == "turn_on":
             console.print(f"Turning on all devices in group '{group_name}'...")
@@ -168,9 +176,14 @@ def _display_operation_results(results: Dict):
         console.print(f"Parameters: {json.dumps(results['parameters'])}")
     console.print(f"Devices affected: {results['device_count']}")
     
+    # Make sure device registry has loaded all devices
+    device_registry.load_all_devices()
+    
     # Create table for device results
     table = Table(show_header=True, header_style="bold magenta", box=box.SQUARE)
+    table.add_column("Device Name", style="cyan")
     table.add_column("Device ID", style="dim")
+    table.add_column("IP Address", style="blue")
     table.add_column("Success")
     table.add_column("Result/Error")
     
@@ -189,8 +202,15 @@ def _display_operation_results(results: Dict):
             else:
                 result_text = result_str
         
+        # Look up device details from registry
+        device = device_registry.get_device(device_id)
+        device_name = device.name if device else "Unknown"
+        ip_address = device.ip_address if device else "Unknown"
+        
         table.add_row(
+            device_name,
             device_id,
+            ip_address,
             "[green]Yes[/green]" if success else "[red]No[/red]",
             result_text
         )

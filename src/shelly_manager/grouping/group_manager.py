@@ -11,11 +11,13 @@ import asyncio
 
 from .models import DeviceGroup
 from ..utils.logging import get_logger
+from ..models.device_registry import device_registry
 
 # Get the logger for this module
 logger = get_logger(__name__)
 
 DEFAULT_GROUPS_DIR = "data/groups"
+ALL_DEVICES_GROUP_NAME = "all-devices"  # Special group name for all devices
 
 class GroupManager:
     """
@@ -278,16 +280,48 @@ class GroupManager:
         Returns:
             Optional[DeviceGroup]: The group, or None if not found
         """
+        # Handle special "all-devices" group
+        if group_name == ALL_DEVICES_GROUP_NAME:
+            return self._get_all_devices_group()
+            
         return self.groups.get(group_name)
+    
+    def _get_all_devices_group(self) -> DeviceGroup:
+        """
+        Create a dynamic group that includes all known devices.
+        
+        Returns:
+            DeviceGroup: A group containing all known devices
+        """
+        # Load all devices from the registry
+        device_registry.load_all_devices()
+        
+        # Get all device IDs from the registry
+        all_device_ids = [device.id for device in device_registry.devices.values()]
+        
+        # Create a dynamic group (not saved to disk)
+        return DeviceGroup(
+            name=ALL_DEVICES_GROUP_NAME,
+            description="Dynamic group containing all known devices",
+            device_ids=all_device_ids,
+            tags=["dynamic", "system"],
+            config={"dynamic": True, "system": True}
+        )
     
     def list_groups(self) -> List[DeviceGroup]:
         """
         List all groups.
         
         Returns:
-            List of all groups
+            List of all groups, including the special all-devices group
         """
-        return list(self.groups.values())
+        groups_list = list(self.groups.values())
+        
+        # Add the special all-devices group if it doesn't already exist
+        if ALL_DEVICES_GROUP_NAME not in self.groups:
+            groups_list.append(self._get_all_devices_group())
+            
+        return groups_list
     
     # Alias for backward compatibility
     get_all_groups = list_groups

@@ -299,22 +299,31 @@ class DiscoveryService:
             
         Returns:
             List of discovered devices
+            
+        Raises:
+            ValueError: If no network is specified and auto-detection fails
         """
         # Clear previous discovery data
         self._discovery_queue.clear()
         self._discovered_ips.clear()
         self._mdns_discovered_ips.clear()
         
-        # If no network is specified, try to detect the current network
-        if not network:
-            detected_network = get_default_network()
-            if detected_network:
-                network = detected_network
-                logger.info(f"Using detected network: {network}")
-            else:
-                # Fallback to a common home network - prefer 192.168.3.0/24 as indicated
-                network = "192.168.3.0/24"
-                logger.warning(f"Could not detect network, using default: {network}")
+        # If specific IPs are provided, network is not needed
+        if not ip_addresses:
+            # If no network is specified, try to detect the current network
+            if not network:
+                detected_network = get_default_network()
+                if detected_network:
+                    network = detected_network
+                    logger.info(f"Auto-detected network: {network}")
+                else:
+                    # Instead of falling back to a hardcoded default, raise an error
+                    # that clearly instructs the user what to do
+                    logger.error("Could not auto-detect network and no network was specified")
+                    raise ValueError(
+                        "Unable to auto-detect your network. Please specify a network using "
+                        "the --network parameter (e.g., --network 192.168.1.0/24)"
+                    )
                 
         # Initialize aiohttp session for HTTP probing
         await self._ensure_session()

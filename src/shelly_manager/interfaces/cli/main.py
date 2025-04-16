@@ -178,18 +178,27 @@ def discover(
         if ips:
             ip_addresses = [ip.strip() for ip in ips.split(',')]
             logger.info(f"Will probe specific IP addresses: {ip_addresses}")
-        elif not network:
-            # If neither network nor IPs provided, use default network
-            network = "192.168.1.0/24"
-            logger.info(f"No network or IPs specified, using default network: {network}")
+            
+        # Note: We don't set a default network here
+        # The discovery service will attempt to auto-detect the network
+        # If that fails, it will inform the user to use the --network parameter
         
         # Start discovery - using a separate asyncio function
         async def run_discovery():
-            return await discovery_service.discover_devices(
-                network=network, 
-                force_http=force_http,
-                ip_addresses=ip_addresses
-            )
+            try:
+                return await discovery_service.discover_devices(
+                    network=network, 
+                    force_http=force_http,
+                    ip_addresses=ip_addresses
+                )
+            except ValueError as e:
+                # Network auto-detection failed
+                logger.error(f"Network error: {e}")
+                console = Console()
+                console.print(f"[bold red]ERROR:[/] {str(e)}")
+                console.print("\nPlease run the command again with the --network parameter.")
+                console.print("Example: [bold]discover --network 192.168.1.0/24[/]")
+                return []
             
         # Run the discovery process
         devices = asyncio.run(run_discovery())

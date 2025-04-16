@@ -128,6 +128,9 @@ def main(debug: bool = typer.Option(False, "--debug", help="Enable debug logging
     """
     Shelly Manager CLI - manage and control Shelly devices
     """
+    # Check if debug was enabled early via command line
+    debug = debug or "--debug" in sys.argv or early_debug_enabled
+    
     # Configure logging
     log_config = LogConfig(
         app_name="shelly_manager",

@@ -32,12 +32,18 @@ class LogConfig:
     
     def setup(self):
         """Configure logging for the application"""
-        # Get the root logger
+        # Check if debug mode is already enabled via command line
+        # This will take precedence over the debug flag in the constructor
         root_logger = logging.getLogger()
+        for handler in root_logger.handlers:
+            if (isinstance(handler, logging.StreamHandler) and 
+                handler.level == logging.DEBUG and
+                "--debug" in sys.argv):
+                self.debug = True
+                break
+                
+        # Get the root logger
         root_logger.setLevel(logging.DEBUG if self.debug else logging.INFO)
-        
-        # Remove any existing handlers
-        root_logger.handlers = []
         
         # Create formatters
         file_formatter = logging.Formatter(
@@ -71,15 +77,17 @@ class LogConfig:
         # Console handler
         if self.log_to_console:
             console_handler = logging.StreamHandler(sys.stdout)
-            console_handler.setLevel(logging.INFO)  # Console always shows INFO and above
+            # Let console show DEBUG messages if debug mode is enabled
+            console_handler.setLevel(logging.DEBUG if self.debug else logging.INFO)
             console_handler.setFormatter(console_formatter)
             root_logger.addHandler(console_handler)
         
         # Log startup information
         root_logger.info(f"Logging configured for {self.app_name}")
-        root_logger.info(f"Debug mode: {self.debug}")
-        root_logger.info(f"Log directory: {os.path.abspath(self.log_dir)}")
+        if self.debug:
+            root_logger.info(f"Debug mode: Enabled")
         if self.log_to_file:
+            root_logger.info(f"Log directory: {os.path.abspath(self.log_dir)}")
             root_logger.info(f"Log files will be rotated daily")
             root_logger.info(f"Keeping {self.backup_count} backup files")
 

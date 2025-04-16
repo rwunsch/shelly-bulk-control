@@ -15,6 +15,7 @@ from ...models.device_schema import DeviceSchema
 from ...discovery.discovery_service import DiscoveryService
 from ...config_manager.config_manager import ConfigManager
 from ...grouping.group_manager import GroupManager
+from ...grouping.command_service import GroupCommandService
 from ...parameter.parameter_service import ParameterService
 from ...utils.logging import get_logger
 
@@ -97,6 +98,7 @@ discovery_service = DiscoveryService()
 config_manager = ConfigManager()
 group_manager = GroupManager()
 parameter_service = ParameterService()
+command_service = GroupCommandService()
 
 # Configuration for periodic discovery
 DEFAULT_DISCOVERY_INTERVAL = 300  # 5 minutes in seconds
@@ -131,6 +133,7 @@ async def startup_event():
     await config_manager.start()
     await group_manager.load_groups()
     await parameter_service.initialize()
+    await command_service.start()
     
     # Start device discovery automatically on startup
     try:
@@ -162,6 +165,7 @@ async def shutdown_event():
     
     await discovery_service.stop()
     await config_manager.stop()
+    await command_service.stop()
     
     logger.info("API server shutdown complete")
 
@@ -226,8 +230,11 @@ async def update_device_settings(device_id: str, settings: Dict[str, Any]):
 @app.post("/devices/{device_id}/operation", response_model=OperationResponse)
 async def perform_device_operation(device_id: str, operation_request: OperationRequest):
     """Perform an operation on a specific device (e.g., reboot, identify, toggle)"""
+    logger.info(f"API request: Performing operation '{operation_request.operation}' on device {device_id}")
+    
     devices = {device.id: device for device in discovery_service.devices}
     if device_id not in devices:
+        logger.warning(f"API request failed: Device {device_id} not found")
         raise HTTPException(status_code=404, detail="Device not found")
 
     device = devices[device_id]
@@ -235,13 +242,26 @@ async def perform_device_operation(device_id: str, operation_request: OperationR
     parameters = operation_request.parameters or {}
     
     try:
-        result = await config_manager.perform_operation(device, operation, parameters)
+        # Use command service instead of config manager
+        result = await command_service.send_command(device, operation, parameters)
+        
+        # Check if the command was successful
+        if isinstance(result, dict) and not result.get("success", True):
+            logger.warning(f"API request partially failed: Operation '{operation}' failed on {device_id}: {result.get('error', 'Unknown error')}")
+            return OperationResponse(
+                success=False,
+                message=f"Operation '{operation}' failed: {result.get('error', 'Unknown error')}",
+                details=result
+            )
+            
+        logger.info(f"API request successful: Operation '{operation}' performed on {device_id}")
         return OperationResponse(
             success=True,
             message=f"Operation '{operation}' performed successfully on {device.name}",
             details=result
         )
     except Exception as e:
+        logger.error(f"API request failed: Operation '{operation}' on {device_id} raised exception: {str(e)}")
         return OperationResponse(
             success=False,
             message=f"Operation '{operation}' failed: {str(e)}",
@@ -321,35 +341,86 @@ async def delete_group(group_name: str):
 @app.post("/groups/{group_name}/operation", response_model=OperationResponse)
 async def perform_group_operation(group_name: str, operation_request: OperationRequest):
     """Perform an operation on all devices in a group"""
-    group = group_manager.get_group(group_name)
-    if not group:
-        raise HTTPException(status_code=404, detail=f"Group '{group_name}' not found")
+    logger.info(f"API request: Performing operation '{operation_request.operation}' on group {group_name}")
     
-    # Get all devices in the group
-    devices = [d for d in discovery_service.devices if d.id in group.device_ids]
-    if not devices:
-        raise HTTPException(status_code=404, detail=f"No devices found in group '{group_name}'")
-    
-    # Perform operation on all devices
-    operation = operation_request.operation
-    parameters = operation_request.parameters or {}
-    
-    results = {}
-    success = True
-    
-    for device in devices:
+    # Special handling for firmware update operations
+    if operation_request.operation == "update_firmware" or operation_request.operation == "apply_updates":
         try:
-            result = await config_manager.perform_operation(device, operation, parameters)
-            results[device.id] = {"success": True, "details": result}
+            # Use the specific firmware update method from command service
+            only_with_updates = not operation_request.parameters.get("check_only", False)
+            result = await command_service.apply_updates_group(group_name, only_with_updates)
+            
+            # Check if operation was successful
+            if "error" in result:
+                logger.warning(f"API request failed: Firmware update on group {group_name} failed: {result['error']}")
+                return OperationResponse(
+                    success=False,
+                    message=f"Firmware update failed: {result['error']}",
+                    details=result
+                )
+                
+            # Process results
+            device_results = {}
+            success = True
+            
+            for device_id, device_result in result.get("results", {}).items():
+                if not device_result.get("success", True):
+                    success = False
+                device_results[device_id] = device_result
+                
+            logger.info(f"API request completed: Firmware update on group {group_name}, success: {success}")
+            return OperationResponse(
+                success=success,
+                message=f"Firmware update performed on group '{group_name}'",
+                details={"device_results": device_results}
+            )
         except Exception as e:
-            results[device.id] = {"success": False, "error": str(e)}
-            success = False
+            logger.error(f"API request failed: Firmware update on group {group_name} raised exception: {str(e)}")
+            return OperationResponse(
+                success=False,
+                message=f"Firmware update failed: {str(e)}",
+                details=None
+            )
     
-    return OperationResponse(
-        success=success,
-        message=f"Operation '{operation}' performed on group '{group_name}'",
-        details={"device_results": results}
-    )
+    # For other operations, use the general operate_group method
+    try:
+        # Use command service operate_group
+        operation = operation_request.operation
+        parameters = operation_request.parameters or {}
+        
+        result = await command_service.operate_group(group_name, operation, parameters)
+        
+        # Check if operation was successful
+        if "error" in result:
+            logger.warning(f"API request failed: Operation '{operation}' on group {group_name} failed: {result['error']}")
+            return OperationResponse(
+                success=False,
+                message=f"Operation '{operation}' failed: {result['error']}",
+                details=result
+            )
+        
+        # Process results to match expected format
+        device_results = {}
+        success = True
+        
+        for device_id, device_result in result.get("results", {}).items():
+            if not device_result.get("success", True):
+                success = False
+            device_results[device_id] = device_result
+        
+        logger.info(f"API request completed: Operation '{operation}' on group {group_name}, success: {success}")
+        return OperationResponse(
+            success=success,
+            message=f"Operation '{operation}' performed on group '{group_name}'",
+            details={"device_results": device_results}
+        )
+    except Exception as e:
+        logger.error(f"API request failed: Operation '{operation}' on group {group_name} raised exception: {str(e)}")
+        return OperationResponse(
+            success=False,
+            message=f"Operation '{operation}' failed: {str(e)}",
+            details=None
+        )
 
 # Parameter endpoints
 @app.get("/parameters/supported", response_model=Dict[str, Any])

@@ -31,13 +31,25 @@ from shelly_manager.models.parameter_mapping import parameter_manager, Parameter
 logger = get_logger(__name__)
 
 # Create typer app
-app = typer.Typer(help="Device parameter management")
-get_app = typer.Typer(help="Get parameter values")
-set_app = typer.Typer(help="Set parameter values")
+app = typer.Typer(name="parameters", help="""
+Manage device parameters.
+
+This command group provides functionality for working with device parameters:
+
+COMMANDS:
+  get        Get a parameter value from a specific device
+  set        Set a parameter value on a device or group
+  common     Manage parameters common to multiple device types
+  list       List all parameters for a specific device
+  discover   Discover available parameters for a device
+  
+For detailed help on a specific command, use:
+  parameters COMMAND --help
+""")
+# Remove the get_app and set_app typers since we're using direct commands
 common_app = typer.Typer(help="Common parameter operations")
 
-app.add_typer(get_app, name="get")
-app.add_typer(set_app, name="set")
+# Don't add the empty typers as subgroups
 app.add_typer(common_app, name="common")
 
 # Create console for rich output
@@ -208,26 +220,28 @@ def create_string_parameter_command(param, command_name, command_help):
 
 
 @app.command("list")
-def list_parameters(
-    ctx: typer.Context,
-    device_id: str = typer.Argument(..., help="Device ID to list parameters for"),
-    writable_only: bool = typer.Option(False, "--writable", "-w", help="Show only writable parameters"),
-    debug: bool = typer.Option(False, "--debug", "-d", help="Enable debug mode")
-):
+def list_parameters(device_id: str = typer.Argument(..., help="Device ID to list parameters for")):
     """
-    List all parameters for a device.
+    List all available parameters for a specific device.
     
-    This command displays all parameters for a specified device,
-    showing parameter names, current values, and metadata.
+    This command displays all parameters that can be configured for the specified device,
+    based on its model and capabilities. Each parameter is shown with its name,
+    current value, and parameter type.
+    
+    ARGUMENTS:
+        DEVICE_ID: The ID of the device to list parameters for (e.g., shellyplus1-441793a3b6c4)
+    
+    EXAMPLES:
+        parameters list shellyplus1-441793a3b6c4
     """
     # Run the async function
-    asyncio.run(_list_parameters_async(device_id, writable_only, debug))
+    asyncio.run(_list_parameters_async(device_id))
 
 
-async def _list_parameters_async(device_id: str, writable_only: bool, debug: bool):
+async def _list_parameters_async(device_id: str):
     """List parameters for a device."""
     # Set up logging
-    configure_logging(debug=debug)
+    configure_logging()
     
     # Initialize services
     parameter_service = ParameterService()
@@ -245,7 +259,7 @@ async def _list_parameters_async(device_id: str, writable_only: bool, debug: boo
         console.print(f"[cyan]Loading parameters for {device.name} ({device.id})...[/cyan]")
         
         # List device parameters
-        parameters = await parameter_service.list_all_device_parameters(device, not writable_only)
+        parameters = await parameter_service.list_all_device_parameters(device)
         
         # Display results
         _display_device_parameters(device, parameters)
@@ -317,9 +331,31 @@ def get_parameter(
     debug: bool = typer.Option(False, "--debug", "-d", help="Enable debug mode")
 ):
     """
-    Get the current value of a parameter.
+    Get the current value of a parameter from a specific device.
     
-    This command retrieves and displays the current value of a parameter for a device.
+    This command retrieves and displays the current value of a parameter for a specified device.
+    The device is identified by its device ID, and you need to provide the exact parameter name.
+    Use the 'list' command first to see all available parameters for a device.
+    
+    ARGUMENTS:
+        DEVICE_ID  The ID of the device to get the parameter from
+                   (e.g., d8bfc0dbf4fb, shellyplug-s123456)
+                   
+        PARAMETER  The name of the parameter to retrieve 
+                   (e.g., eco_mode_enabled, name, max_power, switch:0.output)
+    
+    EXAMPLES:
+        # Get the name of a device
+        parameters get d8bfc0dbf4fb name
+        
+        # Get the eco mode setting for a plug
+        parameters get shellyplug-s123456 eco_mode_enabled
+        
+        # Get the current switch state
+        parameters get shellydimmer-44556677 switch:0.output
+        
+        # Get the maximum power setting
+        parameters get shellyem-aabbccdd max_power
     """
     # Run the async function
     asyncio.run(_get_parameter_async(device_id, parameter, debug))
@@ -372,24 +408,47 @@ def set_parameter(
     device_id: Optional[str] = typer.Option(None, "--device", "-d", help="Device ID to set parameter on"),
     group_name: Optional[str] = typer.Option(None, "--group", "-g", help="Set parameter on all devices in this group"),
     auto_restart: bool = typer.Option(False, "--restart", "-r", help="Automatically restart device if required"),
-    debug: bool = typer.Option(False, "--debug", "-d", help="Enable debug mode")
+    debug: bool = typer.Option(False, "--debug", help="Enable debug mode")
 ):
     """
     Set a parameter value on a device or group of devices.
     
     This command sets the value of a parameter for a specific device or all devices in a group.
-    Some parameters may require device restart to take effect. Use the --restart flag to
-    automatically restart devices when needed.
+    You must provide the parameter name, value, and either a device ID or group name.
+    Use the 'list' command first to see all available parameters for a device.
     
-    Examples:
-        - Set eco_mode on a single device:
-          shelly-manager parameters set eco_mode true --device abc123
-          
-        - Set max_power on all devices in a group:
-          shelly-manager parameters set max_power 2000 --group living_room
-          
-        - Set network configuration with automatic restart:
-          shelly-manager parameters set static_ip_config true --device abc123 --restart
+    ARGUMENTS:
+        PARAMETER  The name of the parameter to set 
+                   (e.g., eco_mode_enabled, name, max_power, switch:0.output)
+                   
+        VALUE      The value to set for the parameter. The type depends on the parameter:
+                   - Boolean: true/false
+                   - Integer: numeric value without decimals
+                   - Float: numeric value with decimals
+                   - String: text value, use quotes if it contains spaces
+    
+    OPTIONS:
+        -d, --device TEXT    Device ID to set parameter on (e.g., shellyplug-s123456)
+        -g, --group TEXT     Set parameter on all devices in this group instead of a single device
+        -r, --restart        Automatically restart device if required by the parameter change
+    
+    NOTE: You must specify either --device or --group, but not both.
+    
+    EXAMPLES:
+        # Turn on a switch
+        parameters set switch:0.output true --device shellysw-112233
+        
+        # Set eco mode on a single device
+        parameters set eco_mode_enabled true --device shellyplug-s123456
+        
+        # Set the name of a device
+        parameters set name "Living Room Plug" --device shellyplug-s123456
+        
+        # Set max power for all devices in a group
+        parameters set max_power 2000 --group kitchen
+        
+        # Set static IP configuration with automatic restart
+        parameters set static_ip_config true --device shellypro4pm-aabbcc --restart
     """
     # Run the async function
     asyncio.run(_set_parameter_async(parameter, value, device_id, group_name, auto_restart, debug))
@@ -839,14 +898,34 @@ def _parse_value(value_str: str) -> Union[str, int, float, bool]:
     return value_str
 
 
-@set_app.command("group")
+@app.command("set-group")
 async def set_parameter_for_group(
     group_id: str = typer.Argument(..., help="ID of the group"),
     parameter_id: str = typer.Argument(..., help="ID of the parameter to set"),
     value: str = typer.Argument(..., help="Value to set"),
     skip_validation: bool = typer.Option(False, "--skip-validation", help="Skip parameter validation"),
 ) -> None:
-    """Set a parameter value for all devices in a group."""
+    """
+    Set a parameter value for all devices in a group.
+    
+    This command sets the value of a specified parameter for all devices in a group.
+    It's useful when you want to apply the same setting to multiple devices at once.
+    
+    ARGUMENTS:
+        GROUP_ID      The ID of the group containing the devices
+        PARAMETER_ID  The name of the parameter to set
+        VALUE         The value to set for the parameter
+        
+    OPTIONS:
+        --skip-validation  Skip validation of the parameter value (use with caution)
+        
+    EXAMPLES:
+        # Set eco mode for all devices in the 'kitchen' group
+        parameters set-group kitchen eco_mode_enabled true
+        
+        # Set max power for all devices in the 'high_power' group
+        parameters set-group high_power max_power 2000
+    """
     console.print(f"Setting parameter [bold]{parameter_id}[/bold] to [bold]{value}[/bold] for all devices in group [bold]{group_id}[/bold]")
     
     parameter_service = ParameterService()

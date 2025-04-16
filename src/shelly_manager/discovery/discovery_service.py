@@ -1076,7 +1076,9 @@ class DiscoveryService:
                 except Exception:
                     pass
                 
-                test_ip = gateway or "192.168.1.1"  # Fallback to common gateway
+                test_ip = gateway or "127.0.0.1"  # Fallback to common gateway
+                
+            logger.info(f"Using gateway IP: {test_ip}")
             
             # Test latency
             import asyncio
@@ -1095,6 +1097,7 @@ class DiscoveryService:
             except Exception:
                 # If timeout or error, assume high latency
                 latency_ms = 500
+            logger.info(f"Latency: {latency_ms}ms")
             
             # Adjust multiplier based on latency
             if latency_ms < 10:  # Very fast network

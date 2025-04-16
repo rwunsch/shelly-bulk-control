@@ -263,6 +263,8 @@ def set_settings(device_id: str, setting: list[str], debug: bool = typer.Option(
     if debug:
         logging.getLogger().setLevel(logging.DEBUG)
         console.print("[yellow]Debug mode enabled[/yellow]")
+        # Also enable debug for config_manager
+        logging.getLogger("shelly_manager.config_manager").setLevel(logging.DEBUG)
     
     # First try to get the device from registry
     device = device_registry.get_device(device_id)
@@ -277,7 +279,9 @@ def set_settings(device_id: str, setting: list[str], debug: bool = typer.Option(
     for s in setting:
         try:
             key, value = s.split("=", 1)
+            # Store as string, type conversion will happen in config_manager
             settings[key] = value
+            logging.debug(f"Added setting: {key}={value}")
         except ValueError:
             console.print(f"Invalid setting format: {s}", style="red")
             raise typer.Exit(1)
@@ -299,6 +303,9 @@ def set_settings(device_id: str, setting: list[str], debug: bool = typer.Option(
             # Use the device from registry
             device_to_use = device
         
+        console.print(f"Applying settings to {device_to_use.id} ({device_to_use.ip_address}), generation: {device_to_use.generation}", style="blue")
+        console.print(f"Settings to apply: {settings}", style="blue")
+        
         # Apply settings using config manager
         await config_manager.start()
         try:
@@ -309,10 +316,12 @@ def set_settings(device_id: str, setting: list[str], debug: bool = typer.Option(
             if need_discovery:
                 await discovery_service.stop()
 
-    if run_async(_set_settings()):
-        console.print("Settings updated successfully", style="green")
+    success = run_async(_set_settings())
+    if success:
+        console.print("Settings updated and verified successfully", style="green bold")
     else:
-        console.print("Failed to update settings", style="red")
+        console.print("Settings were sent to the device but some settings may not have been applied correctly", style="yellow")
+        console.print("Check the log file for more details", style="yellow")
 
 if __name__ == "__main__":
     app() 

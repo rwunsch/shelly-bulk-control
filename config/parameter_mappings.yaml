@@ -1,3 +1,336 @@
+# Parameter Mappings Configuration
+# This file defines mappings between standard parameter names and device-specific parameter names
+
+# Common parameter definitions including display names, descriptions, and device generation mappings
+parameters:
+  # Power Management Parameters
+  eco_mode:
+    display_name: "ECO Mode"
+    description: "Energy saving mode"
+    group: "power"
+    gen1:
+      endpoint: "settings"
+      property: "eco_mode"
+    gen2:
+      method: "Sys.SetConfig"
+      component: "device"
+      property: "eco_mode"
+    requires_restart: false
+
+  max_power:
+    display_name: "Maximum Power"
+    description: "Maximum power in watts"
+    group: "power"
+    type: "float"
+    min_value: 0.0
+    max_value: 3500.0
+    unit: "W"
+    gen1:
+      endpoint: "settings"
+      property: "max_power"
+    gen2:
+      method: "Sys.SetConfig"
+      component: "sys"
+      property: "max_power"
+    requires_restart: false
+
+  power_on_state:
+    display_name: "Power On State"
+    description: "Default state when the device is powered on"
+    group: "power"
+    type: "enum"
+    enum_values: ["on", "off", "last"]
+    gen1:
+      endpoint: "settings"
+      property: "default_state"
+    gen2:
+      method: "Sys.SetConfig"
+      component: "switch:0"
+      property: "initial_state"
+    requires_restart: false
+
+  auto_on:
+    display_name: "Auto On"
+    description: "Automatically turn on after a specified time"
+    group: "power"
+    type: "boolean"
+    gen1:
+      endpoint: "settings"
+      property: "auto_on"
+    gen2:
+      method: "Sys.SetConfig"
+      component: "switch:0"
+      property: "auto_on"
+    requires_restart: false
+
+  auto_on_delay:
+    display_name: "Auto On Delay"
+    description: "Time in seconds before auto on"
+    group: "power"
+    type: "integer"
+    min_value: 0
+    max_value: 86400
+    unit: "s"
+    gen1:
+      endpoint: "settings"
+      property: "auto_on_delay"
+    gen2:
+      method: "Sys.SetConfig"
+      component: "switch:0"
+      property: "auto_on_delay"
+    requires_restart: false
+
+  auto_off:
+    display_name: "Auto Off"
+    description: "Automatically turn off after a specified time"
+    group: "power"
+    type: "boolean"
+    gen1:
+      endpoint: "settings"
+      property: "auto_off"
+    gen2:
+      method: "Sys.SetConfig"
+      component: "switch:0"
+      property: "auto_off"
+    requires_restart: false
+
+  auto_off_delay:
+    display_name: "Auto Off Delay"
+    description: "Time in seconds before auto off"
+    group: "power"
+    type: "integer"
+    min_value: 0
+    max_value: 86400
+    unit: "s"
+    gen1:
+      endpoint: "settings"
+      property: "auto_off_delay"
+    gen2:
+      method: "Sys.SetConfig"
+      component: "switch:0"
+      property: "auto_off_delay"
+    requires_restart: false
+
+  # Network Parameters
+  static_ip_config:
+    display_name: "Static IP Configuration"
+    description: "Use static IP instead of DHCP"
+    group: "network"
+    type: "boolean"
+    gen1:
+      endpoint: "settings/sta"
+      property: "ipv4_method"  # "static" or "dhcp"
+    gen2:
+      method: "Wifi.SetConfig"
+      component: "wifi"
+      property: "sta_static_enable"
+    requires_restart: true
+
+  ip_address:
+    display_name: "IP Address"
+    description: "Static IP address"
+    group: "network"
+    type: "string"
+    gen1:
+      endpoint: "settings/sta"
+      property: "ip"
+    gen2:
+      method: "Wifi.SetConfig"
+      component: "wifi"
+      property: "sta_ip"
+    requires_restart: true
+
+  gateway:
+    display_name: "Gateway"
+    description: "Network gateway"
+    group: "network"
+    type: "string"
+    gen1:
+      endpoint: "settings/sta"
+      property: "gw"
+    gen2:
+      method: "Wifi.SetConfig"
+      component: "wifi"
+      property: "sta_gw"
+    requires_restart: true
+
+  subnet_mask:
+    display_name: "Subnet Mask"
+    description: "Network subnet mask"
+    group: "network"
+    type: "string"
+    gen1:
+      endpoint: "settings/sta"
+      property: "mask"
+    gen2:
+      method: "Wifi.SetConfig"
+      component: "wifi"
+      property: "sta_mask"
+    requires_restart: true
+
+  dns_server:
+    display_name: "DNS Server"
+    description: "Primary DNS server"
+    group: "network"
+    type: "string"
+    gen1:
+      endpoint: "settings/sta"
+      property: "dns"
+    gen2:
+      method: "Wifi.SetConfig"
+      component: "wifi"
+      property: "sta_dns"
+    requires_restart: true
+
+  # MQTT Parameters
+  mqtt_enable:
+    display_name: "Enable MQTT"
+    description: "Enable MQTT client"
+    group: "mqtt"
+    type: "boolean"
+    gen1:
+      endpoint: "settings/mqtt"
+      property: "enable"
+    gen2:
+      method: "MQTT.SetConfig"
+      component: "mqtt"
+      property: "enable"
+    requires_restart: true
+
+  mqtt_server:
+    display_name: "MQTT Server"
+    description: "MQTT broker server address"
+    group: "mqtt"
+    type: "string"
+    gen1:
+      endpoint: "settings/mqtt"
+      property: "server"
+    gen2:
+      method: "MQTT.SetConfig"
+      component: "mqtt"
+      property: "server"
+    requires_restart: true
+
+  mqtt_port:
+    display_name: "MQTT Port"
+    description: "MQTT broker port"
+    group: "mqtt"
+    type: "integer"
+    min_value: 1
+    max_value: 65535
+    gen1:
+      endpoint: "settings/mqtt"
+      property: "port"
+    gen2:
+      method: "MQTT.SetConfig"
+      component: "mqtt"
+      property: "port"
+    requires_restart: true
+
+  mqtt_username:
+    display_name: "MQTT Username"
+    description: "MQTT authentication username"
+    group: "mqtt"
+    type: "string"
+    gen1:
+      endpoint: "settings/mqtt"
+      property: "user"
+    gen2:
+      method: "MQTT.SetConfig"
+      component: "mqtt"
+      property: "user"
+    requires_restart: true
+
+  mqtt_password:
+    display_name: "MQTT Password"
+    description: "MQTT authentication password"
+    group: "mqtt"
+    type: "string"
+    gen1:
+      endpoint: "settings/mqtt"
+      property: "pass"
+    gen2:
+      method: "MQTT.SetConfig"
+      component: "mqtt"
+      property: "pass"
+    requires_restart: true
+
+  # UI and Visual Settings
+  led_status_disable:
+    display_name: "Disable Status LED"
+    description: "Disable the status LED"
+    group: "ui"
+    type: "boolean"
+    gen1:
+      endpoint: "settings"
+      property: "led_status_disable"
+    gen2:
+      method: "Sys.SetConfig"
+      component: "sys"
+      property: "led_disable"
+    requires_restart: false
+
+  night_mode_enable:
+    display_name: "Night Mode"
+    description: "Enable night mode (dimmed LEDs)"
+    group: "ui"
+    type: "boolean"
+    gen1:
+      endpoint: "settings"
+      property: "night_mode"
+    gen2:
+      method: "Sys.SetConfig"
+      component: "sys"
+      property: "night_mode"
+    requires_restart: false
+
+  # Security Settings
+  cloud_enable:
+    display_name: "Cloud Enabled"
+    description: "Enable Shelly cloud connection"
+    group: "security"
+    type: "boolean"
+    gen1:
+      endpoint: "settings/cloud"
+      property: "enabled"
+    gen2:
+      method: "Cloud.SetConfig"
+      component: "cloud"
+      property: "enable"
+    requires_restart: true
+
+# Common parameter groups that should appear in CLI 'common' commands
+common_parameter_groups:
+  power:
+    - eco_mode
+    - max_power
+    - power_on_state
+    - auto_on
+    - auto_off
+  network:
+    - static_ip_config
+    - ip_address
+    - gateway
+    - subnet_mask
+    - dns_server
+  mqtt:
+    - mqtt_enable
+    - mqtt_server
+    - mqtt_port
+    - mqtt_username
+    - mqtt_password
+  ui:
+    - led_status_disable
+    - night_mode_enable
+  security:
+    - cloud_enable
+
+# Gen1 to standard parameter name mappings (for compatibility)
+gen1_to_standard:
+  eco_mode_enabled: eco_mode
+  led_power_disable: led_power_disable
+  default_state: power_on_state
+
 # Parameter mapping between generations
 # Format: standard_name: gen1_name
 # 

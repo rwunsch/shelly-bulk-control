@@ -21,7 +21,7 @@ from ..models.device_registry import device_registry
 from ..discovery.discovery_service import DiscoveryService
 from ..grouping.group_manager import GroupManager
 from ..models.parameters import ParameterDefinition, get_parameters_for_model, ParameterType
-from ..models.parameter_mapping import ParameterMapper
+from ..models.parameter_mapping import ParameterMapper, parameter_manager
 import time
 
 logger = get_logger(__name__)

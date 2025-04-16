@@ -2,10 +2,11 @@
 
 import typer
 import asyncio
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Callable
 import os
 import json
 import yaml
+import inspect
 
 from rich.console import Console
 from rich.table import Table
@@ -24,6 +25,7 @@ from shelly_manager.models.device import Device
 from shelly_manager.config_manager.config_manager import ConfigManager
 from shelly_manager.models.device_config import DeviceConfigManager
 from shelly_manager.grouping.group_service import GroupService
+from shelly_manager.models.parameter_mapping import parameter_manager, ParameterType
 
 # Get logger for this module
 logger = get_logger(__name__)
@@ -50,6 +52,159 @@ def configure_logging(debug: bool = False):
         log_to_console=True
     )
     log_config.setup()
+
+
+# Register dynamic commands for common parameters
+def register_common_parameter_commands():
+    """Register CLI commands for common parameters."""
+    # Get all common parameters from the parameter manager
+    common_params = parameter_manager.get_all_common_parameters()
+    
+    for param in common_params:
+        # Skip parameters that don't make sense as CLI commands
+        if param.parameter_type == ParameterType.OBJECT or param.parameter_type == ParameterType.ARRAY:
+            continue
+            
+        # Create a command for this parameter
+        command_name = param.name.replace('_', '-')
+        command_help = f"Set {param.display_name.lower()} for device(s)"
+        
+        # For boolean parameters, create a simple enable/disable command
+        if param.parameter_type == ParameterType.BOOLEAN:
+            create_boolean_parameter_command(param, command_name, command_help)
+            
+        # For numeric parameters, create a command with a value argument
+        elif param.parameter_type in [ParameterType.INTEGER, ParameterType.FLOAT]:
+            create_numeric_parameter_command(param, command_name, command_help)
+            
+        # For enum parameters, create a command with choices
+        elif param.parameter_type == ParameterType.ENUM and param.enum_values:
+            create_enum_parameter_command(param, command_name, command_help)
+            
+        # For other types (like strings), create a generic command
+        else:
+            create_string_parameter_command(param, command_name, command_help)
+
+
+def create_boolean_parameter_command(param, command_name, command_help):
+    """Create a CLI command for a boolean parameter."""
+    
+    @common_app.command(command_name)
+    def command(
+        ctx: typer.Context,
+        enable: bool = typer.Argument(..., help=f"Enable (true) or disable (false) {param.display_name.lower()}"),
+        device_id: Optional[str] = typer.Option(None, "--device", "-d", help="Device ID to set parameter on"),
+        group_name: Optional[str] = typer.Option(None, "--group", "-g", help="Set parameter on all devices in this group"),
+        auto_restart: bool = typer.Option(param.requires_restart, "--restart/--no-restart", help="Automatically restart device if required"),
+        debug: bool = typer.Option(False, "--debug", help="Enable debug mode"),
+    ):
+        """
+        {command_help}.
+        
+        This command {param.description.lower()}.
+        """
+        # Run the async function
+        asyncio.run(_set_parameter_async(param.name, str(enable), device_id, group_name, auto_restart, debug))
+    
+    # Set the command function name and docstring
+    command.__name__ = f"set_{param.name}"
+    command.__doc__ = f"{command_help}.\n\nThis command {param.description.lower()}."
+
+
+def create_numeric_parameter_command(param, command_name, command_help):
+    """Create a CLI command for a numeric parameter."""
+    param_type = int if param.parameter_type == ParameterType.INTEGER else float
+    
+    @common_app.command(command_name)
+    def command(
+        ctx: typer.Context,
+        value: param_type = typer.Argument(..., help=f"{param.display_name} value{' (in ' + param.unit + ')' if param.unit else ''}"),
+        device_id: Optional[str] = typer.Option(None, "--device", "-d", help="Device ID to set parameter on"),
+        group_name: Optional[str] = typer.Option(None, "--group", "-g", help="Set parameter on all devices in this group"),
+        auto_restart: bool = typer.Option(param.requires_restart, "--restart/--no-restart", help="Automatically restart device if required"),
+        debug: bool = typer.Option(False, "--debug", help="Enable debug mode"),
+    ):
+        """
+        {command_help}.
+        
+        This command {param.description.lower()}.
+        """
+        # Validate value against min/max if defined
+        if param.min_value is not None and value < param.min_value:
+            console.print(f"[red]Error: Value must be at least {param.min_value}[/red]")
+            return
+        if param.max_value is not None and value > param.max_value:
+            console.print(f"[red]Error: Value must be at most {param.max_value}[/red]")
+            return
+            
+        # Run the async function
+        asyncio.run(_set_parameter_async(param.name, str(value), device_id, group_name, auto_restart, debug))
+    
+    # Set the command function name and docstring
+    command.__name__ = f"set_{param.name}"
+    command.__doc__ = f"{command_help}.\n\nThis command {param.description.lower()}."
+
+
+def create_enum_parameter_command(param, command_name, command_help):
+    """Create a CLI command for an enum parameter."""
+    
+    @common_app.command(command_name)
+    def command(
+        ctx: typer.Context,
+        value: str = typer.Argument(..., help=f"{param.display_name} value ({'/'.join(param.enum_values)})", 
+                                   case_sensitive=False),
+        device_id: Optional[str] = typer.Option(None, "--device", "-d", help="Device ID to set parameter on"),
+        group_name: Optional[str] = typer.Option(None, "--group", "-g", help="Set parameter on all devices in this group"),
+        auto_restart: bool = typer.Option(param.requires_restart, "--restart/--no-restart", help="Automatically restart device if required"),
+        debug: bool = typer.Option(False, "--debug", help="Enable debug mode"),
+    ):
+        """
+        {command_help}.
+        
+        This command {param.description.lower()}.
+        """
+        # Validate value against enum values
+        if value.lower() not in [str(v).lower() for v in param.enum_values]:
+            console.print(f"[red]Error: Value must be one of: {', '.join(param.enum_values)}[/red]")
+            return
+        
+        # Find the correct case for the value
+        for v in param.enum_values:
+            if str(v).lower() == value.lower():
+                value = str(v)
+                break
+                
+        # Run the async function
+        asyncio.run(_set_parameter_async(param.name, value, device_id, group_name, auto_restart, debug))
+    
+    # Set the command function name and docstring
+    command.__name__ = f"set_{param.name}"
+    command.__doc__ = f"{command_help}.\n\nThis command {param.description.lower()}."
+
+
+def create_string_parameter_command(param, command_name, command_help):
+    """Create a CLI command for a string parameter."""
+    
+    @common_app.command(command_name)
+    def command(
+        ctx: typer.Context,
+        value: str = typer.Argument(..., help=f"{param.display_name} value"),
+        device_id: Optional[str] = typer.Option(None, "--device", "-d", help="Device ID to set parameter on"),
+        group_name: Optional[str] = typer.Option(None, "--group", "-g", help="Set parameter on all devices in this group"),
+        auto_restart: bool = typer.Option(param.requires_restart, "--restart/--no-restart", help="Automatically restart device if required"),
+        debug: bool = typer.Option(False, "--debug", help="Enable debug mode"),
+    ):
+        """
+        {command_help}.
+        
+        This command {param.description.lower()}.
+        """
+        # Run the async function
+        asyncio.run(_set_parameter_async(param.name, value, device_id, group_name, auto_restart, debug))
+    
+    # Set the command function name and docstring
+    command.__name__ = f"set_{param.name}"
+    command.__doc__ = f"{command_help}.\n\nThis command {param.description.lower()}."
 
 
 @app.command("list")
@@ -1285,4 +1440,8 @@ def set_cloud_enabled(
           shelly-manager parameters common cloud true --group living_room
     """
     # Run the async function
-    asyncio.run(_set_parameter_async("cloud_enable", str(enable), device_id, group_name, auto_restart, debug)) 
+    asyncio.run(_set_parameter_async("cloud_enable", str(enable), device_id, group_name, auto_restart, debug))
+
+
+# Register dynamic commands at module import time
+register_common_parameter_commands() 

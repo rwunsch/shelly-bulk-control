@@ -29,12 +29,12 @@ class ShellyListener(ServiceListener):
         self.discovery_service = discovery_service
         
     def add_service(self, zeroconf, service_type, name):
-        logger.info(f"Service found: {name} ({service_type})")
+        logger.debug(f"Service found: {name} ({service_type})")
         info = zeroconf.get_service_info(service_type, name)
         if info:
             # Process service info
             if 'shelly' in name.lower() or service_type == '_shelly._tcp.local.' or self.discovery_service._is_shelly_device(info):
-                logger.info(f"Found Shelly device: {name}")
+                logger.debug(f"Found Shelly device: {name}")
                 # For now, we only extract the IP address from mDNS
                 # We'll get full device details via HTTP later
                 ip_address = None
@@ -48,7 +48,7 @@ class ShellyListener(ServiceListener):
                         # Some versions of zeroconf might already provide the IP as a string
                         ip_address = str(addr_bytes)
                     
-                    logger.info(f"Discovered Shelly device via mDNS at IP: {ip_address}")
+                    logger.info(f"Discovered Shelly device via mDNS at IP: {ip_address} ({name})")
                     
                     # Queue this IP for detailed HTTP discovery
                     self.discovery_service._queue_ip_for_http_discovery(ip_address, name, service_type)
@@ -64,7 +64,7 @@ class ShellyListener(ServiceListener):
         if info:
             # Similar to add_service, but for updates
             if 'shelly' in name.lower() or service_type == '_shelly._tcp.local.' or self.discovery_service._is_shelly_device(info):
-                logger.info(f"Updated Shelly device: {name}")
+                logger.debug(f"Updated Shelly device: {name}")
                 ip_address = None
                 if info.addresses and len(info.addresses) > 0:
                     # Convert binary address to proper IP string
@@ -76,7 +76,7 @@ class ShellyListener(ServiceListener):
                         # Some versions of zeroconf might already provide the IP as a string
                         ip_address = str(addr_bytes)
                     
-                    logger.info(f"Updated Shelly device via mDNS at IP: {ip_address}")
+                    logger.info(f"Updated Shelly device: {name} - via mDNS at IP: {ip_address}")
                     
                     # Queue this IP for detailed HTTP discovery
                     self.discovery_service._queue_ip_for_http_discovery(ip_address, name, service_type)
@@ -668,16 +668,21 @@ class DiscoveryService:
                 network = "192.168.3.0/24"
                 logger.warning(f"Could not detect network, using default: {network}")
                 
-        logger.info(f"Scanning network {network} for devices and discovering capabilities...")
-        
-        # Start discovery services
-        await self.start()
+        # Initialize aiohttp session for HTTP probing
+        self._session = aiohttp.ClientSession()
+        logger.debug("Initialized aiohttp session")
         
         # Determine if we need to probe specific IPs
         if ip_addresses:
             logger.info(f"Probing specific IP addresses: {ip_addresses}")
             await self._probe_specific_ips(ip_addresses)
         else:
+            # Only start full discovery service if no specific IPs are provided
+            logger.info(f"Scanning network {network} for devices and discovering capabilities...")
+            
+            # Start mDNS discovery for general network scan
+            await self.start()
+            
             # For normal discovery, we'll use both mDNS and HTTP scanning
             # Start mDNS discovery first
             is_wsl = self._is_wsl()
@@ -775,7 +780,7 @@ class DiscoveryService:
         if not self._session:
             self._session = aiohttp.ClientSession()
         
-        logger.info(f"Probing {len(ip_addresses)} IP addresses")
+        logger.info(f"Probing {len(ip_addresses)} specific IP addresses")
         
         # Track statistics
         total_discovered = 0
@@ -792,6 +797,10 @@ class DiscoveryService:
                 
                 # Save device info
                 self._save_device_info(device)
+                
+                # Add to discovery queue for capabilities discovery
+                self._discovery_queue.add(ip)
+                self._discovered_ips.add(ip)
                 
                 # Notify callbacks
                 logger.debug(f"Notifying callbacks about device {device.id}")
@@ -922,7 +931,7 @@ class DiscoveryService:
         max_retries = retries
         retry_delay = 1  # seconds
         
-        logger.info(f"Probing {ip} for Shelly device")
+        logger.debug(f"Probing {ip} for Shelly device")
         
         # First try the /shelly endpoint (works for all devices)
         device = await self._probe_shelly_endpoint(ip, max_retries, retry_delay)
@@ -962,7 +971,7 @@ class DiscoveryService:
                         device.has_update = True
 
                 # DIRECT ECO MODE DETECTION
-                logger.info(f"Checking eco mode settings directly for {ip}")
+                logger.debug(f"Checking eco mode settings directly for {ip}")
                 await self._check_gen2_config_for_eco_mode(ip, device)
                 
                 # Get configuration directly
@@ -978,27 +987,29 @@ class DiscoveryService:
                                 logger.debug(f"GetConfig response for {ip}: {data}")
                                 if "sys" in data and "device" in data["sys"] and "eco_mode" in data["sys"]["device"]:
                                     eco_mode = bool(data["sys"]["device"]["eco_mode"])
-                                    logger.info(f"*** FOUND ECO MODE in sys.device.eco_mode: {eco_mode} ***")
+                                    logger.debug(f"*** FOUND ECO MODE in sys.device.eco_mode: {eco_mode} ***")
                                     device.eco_mode_enabled = eco_mode
                     except Exception as e:
                         logger.error(f"Error in direct GetConfig call: {e}")
                 
                 # Make sure eco_mode_enabled is set to a boolean value
                 if not hasattr(device, 'eco_mode_enabled') or device.eco_mode_enabled is None:
-                    logger.info("Eco mode not detected, setting to False")
+                    logger.debug("Eco mode not detected, setting to False")
                     device.eco_mode_enabled = False
                 else:
-                    logger.info(f"Final eco mode setting: {device.eco_mode_enabled}")
+                    logger.debug(f"Final eco mode setting: {device.eco_mode_enabled}")
                 
                 # Log the discovered device
-                logger.info(f"Discovered device via {device.discovery_method}: {device.id} ({ip})")
-                logger.info(f"  Name: {device.name}")
-                logger.info(f"  Type: {device.raw_type}")
-                logger.info(f"  Model: {device.model}")
-                logger.info(f"  Generation: {device.generation.value}")
-                logger.info(f"  Firmware: {device.firmware_version}")
-                logger.info(f"  Updates: {device.has_update}")
-                logger.info(f"  Eco Mode: {device.eco_mode_enabled}")
+                logger.debug(f"Discovered device via {device.discovery_method}: {device.id} ({ip})")
+                logger.debug(f"  Name: {device.name}")
+                logger.debug(f"  Type: {device.raw_type}")
+                logger.debug(f"  Model: {device.model}")
+                logger.debug(f"  Generation: {device.generation.value}")
+                logger.debug(f"  Firmware: {device.firmware_version}")
+                logger.debug(f"  IP: {device.ip_address}")
+                logger.debug(f"  MAC: {device.mac_address}")
+                logger.debug(f"  Updates: {device.has_update}")
+                logger.debug(f"  Eco Mode: {device.eco_mode_enabled}")
                 
                 return device
             except Exception as e:
@@ -1006,7 +1017,7 @@ class DiscoveryService:
                 # Return the basic device info even if additional info failed
                 return device
         
-        logger.debug(f"No Shelly device found at {ip}")
+        logger.info(f"No Shelly device found at {ip}")
         return None
         
     async def _probe_shelly_endpoint(self, ip: str, max_retries: int = 1, retry_delay: int = 1) -> Optional[Device]:

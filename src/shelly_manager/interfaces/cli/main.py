@@ -168,13 +168,7 @@ def discover(
             else:
                 device_type = device.raw_app or "unknown"
             
-            logger.info(f"Found device: {device.name or device.id} ({device_type})")
-            logger.info(f"  IP: {device.ip_address}")
-            logger.info(f"  MAC: {device.mac_address}")
-            logger.info(f"  Generation: {device.generation.value}")
-            logger.info(f"  Firmware: {device.firmware_version}")
-            logger.info(f"  Discovery Method: {device.discovery_method}")
-            logger.info("")
+            logger.info(f"Found device: {device.name or device.id} ({device_type}) -  Discovery Method: {device.discovery_method}")
         
         # Add callback
         discovery_service.add_callback(on_device_discovered)

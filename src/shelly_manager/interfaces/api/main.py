@@ -98,7 +98,7 @@ discovery_service = DiscoveryService()
 config_manager = ConfigManager()
 group_manager = GroupManager()
 parameter_service = ParameterService()
-command_service = GroupCommandService()
+command_service = GroupCommandService(group_manager)
 
 # Configuration for periodic discovery
 DEFAULT_DISCOVERY_INTERVAL = 300  # 5 minutes in seconds

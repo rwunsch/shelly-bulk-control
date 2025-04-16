@@ -3,6 +3,8 @@ import ipaddress
 import logging
 import yaml
 import os
+import time
+import subprocess
 from typing import List, Optional, Callable, Dict, Any
 from zeroconf import ServiceBrowser, Zeroconf, ServiceListener, ServiceStateChange
 from zeroconf.asyncio import AsyncServiceBrowser, AsyncZeroconf
@@ -12,7 +14,6 @@ from datetime import datetime
 from ..utils.logging import get_logger
 from ..utils.network import get_default_network
 import platform
-import time
 import socket
 import json
 from pathlib import Path
@@ -1026,6 +1027,208 @@ class DiscoveryService:
         # Apply case formatting
         return formatted_mac.upper() if uppercase else formatted_mac.lower()
 
+    def _get_default_gateway(self) -> Optional[str]:
+        """
+        Get the default gateway IP address using platform-specific methods.
+        
+        Returns:
+            Gateway IP address as string, or None if detection fails
+        """
+        try:
+            system = platform.system().lower()
+            
+            # Linux-specific methods
+            if system == "linux":
+                # Method 1: Read from /proc/net/route
+                try:
+                    with open('/proc/net/route', 'r') as f:
+                        for line in f.readlines():
+                            parts = line.strip().split()
+                            if len(parts) >= 3 and parts[1] == '00000000':  # Destination 0.0.0.0
+                                # Convert hex gateway to IP
+                                gw_hex = parts[2]
+                                # Convert little-endian hex to IP
+                                gw = '.'.join(str(int(gw_hex[i:i+2], 16)) for i in range(6, -2, -2))
+                                logger.debug(f"Gateway detected from /proc/net/route: {gw}")
+                                return gw
+                except Exception as e:
+                    logger.debug(f"Failed to read gateway from /proc/net/route: {e}")
+
+                # Method 2: Use 'ip route' command
+                try:
+                    output = subprocess.check_output("ip route | grep default", shell=True, universal_newlines=True)
+                    gw = output.split()[2]
+                    logger.debug(f"Gateway detected from 'ip route': {gw}")
+                    return gw
+                except Exception as e:
+                    logger.debug(f"Failed to get gateway using 'ip route': {e}")
+            
+            # Windows-specific methods
+            elif system == "windows":
+                # Method 1: Use 'route print' command
+                try:
+                    output = subprocess.check_output("route print 0.0.0.0", shell=True, universal_newlines=True)
+                    # Parse the output for the gateway
+                    for line in output.split('\n'):
+                        if '0.0.0.0' in line:
+                            parts = line.split()
+                            if len(parts) >= 5:
+                                gw = parts[3]  # The gateway should be in the 4th column
+                                if self._is_valid_ip(gw):
+                                    logger.debug(f"Gateway detected from 'route print': {gw}")
+                                    return gw
+                except Exception as e:
+                    logger.debug(f"Failed to get gateway using 'route print': {e}")
+            
+            # Method for all platforms: Use socket connection
+            # This doesn't actually connect but determines the interface that would be used
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                s.connect(("8.8.8.8", 80))
+                local_ip = s.getsockname()[0]
+                s.close()
+                
+                # Try to guess gateway by using first 3 octets and .1 as last octet
+                ip_parts = local_ip.split('.')
+                potential_gateway = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.1"
+                logger.debug(f"Potential gateway (guessed from local IP): {potential_gateway}")
+                
+                # Try another common gateway (.254)
+                potential_gateway2 = f"{ip_parts[0]}.{ip_parts[1]}.{ip_parts[2]}.254"
+                
+                # Test connectivity to these potential gateways
+                # First try .1
+                if self._can_ping(potential_gateway):
+                    logger.debug(f"Gateway at {potential_gateway} responds to ping")
+                    return potential_gateway
+                
+                # Then try .254
+                if self._can_ping(potential_gateway2):
+                    logger.debug(f"Gateway at {potential_gateway2} responds to ping")
+                    return potential_gateway2
+                
+                # Return the .1 gateway as best guess if neither responds
+                logger.debug(f"Using guessed gateway (not verified): {potential_gateway}")
+                return potential_gateway
+            except Exception as e:
+                logger.debug(f"Failed to guess gateway using socket approach: {e}")
+            
+            # Return None if all methods fail
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error detecting default gateway: {e}")
+            return None
+    
+    def _is_valid_ip(self, ip: str) -> bool:
+        """Check if a string is a valid IP address"""
+        try:
+            ipaddress.ip_address(ip)
+            return True
+        except ValueError:
+            return False
+    
+    def _can_ping(self, ip: str, timeout: float = 0.5) -> bool:
+        """Check if an IP address responds to ping"""
+        try:
+            # Use platform-specific ping command
+            system = platform.system().lower()
+            if system == "windows":
+                # Windows ping needs different parameter for timeout (in ms)
+                ping_cmd = f"ping -n 1 -w {int(timeout * 1000)} {ip}"
+            else:
+                # Linux/Unix ping timeout in seconds
+                ping_cmd = f"ping -c 1 -W {int(timeout)} {ip}"
+            
+            result = subprocess.run(ping_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            return result.returncode == 0
+        except Exception:
+            return False
+
+    async def _test_latency(self, ip: str) -> float:
+        """
+        Test network latency to a specific IP using multiple methods.
+        
+        Args:
+            ip: IP address to test
+            
+        Returns:
+            Latency in milliseconds
+        """
+        # Default latency assumption in case all tests fail
+        default_latency_ms = 100
+        
+        # Try HTTP first, as it's most relevant for our device scanning
+        try:
+            await self._ensure_session()
+            start_time = time.time()
+            async with self._session.get(f"http://{ip}", timeout=2) as response:
+                # Calculate latency
+                latency_ms = (time.time() - start_time) * 1000
+                logger.debug(f"HTTP latency to {ip}: {latency_ms:.1f}ms")
+                return latency_ms
+        except Exception as e:
+            logger.debug(f"HTTP latency test to {ip} failed: {e}")
+            
+        # Try TCP latency to port 80 as a fallback
+        try:
+            # Establish a TCP connection to measure latency
+            reader, writer = None, None
+            start_time = time.time()
+            try:
+                reader, writer = await asyncio.open_connection(ip, 80, timeout=1)
+                # Calculate latency
+                latency_ms = (time.time() - start_time) * 1000
+                logger.debug(f"TCP latency to {ip}:80: {latency_ms:.1f}ms")
+                return latency_ms
+            except:
+                # Connection failed, try another port
+                pass
+            finally:
+                if writer:
+                    writer.close()
+                    await writer.wait_closed()
+        except Exception as e:
+            logger.debug(f"TCP latency test to {ip}:80 failed: {e}")
+            
+        # Try ICMP ping as a last resort
+        try:
+            # Use synchronous ping to measure latency
+            if self._can_ping(ip):
+                # Try a more precise ping to measure latency
+                system = platform.system().lower()
+                if system == "windows":
+                    ping_cmd = f"ping -n 1 {ip}"
+                else:
+                    ping_cmd = f"ping -c 1 {ip}"
+                
+                start_time = time.time()
+                result = subprocess.run(ping_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                # Calculate latency
+                if result.returncode == 0:
+                    # Try to extract precise ping time from output
+                    output = result.stdout
+                    if "time=" in output:
+                        # Extract time value (works on most platforms)
+                        time_part = output.split("time=")[1].split()[0]
+                        try:
+                            ping_ms = float(time_part.replace("ms", ""))
+                            logger.debug(f"ICMP ping latency to {ip}: {ping_ms:.1f}ms")
+                            return ping_ms
+                        except ValueError:
+                            pass
+                    
+                    # If we couldn't extract precise time, use measured time
+                    latency_ms = (time.time() - start_time) * 1000
+                    logger.debug(f"ICMP ping measured latency to {ip}: {latency_ms:.1f}ms")
+                    return latency_ms
+        except Exception as e:
+            logger.debug(f"ICMP ping latency test to {ip} failed: {e}")
+            
+        # If all tests failed, assume a moderate latency
+        logger.debug(f"All latency tests to {ip} failed, assuming {default_latency_ms}ms")
+        return default_latency_ms
+        
     async def _estimate_optimal_chunk_size(self, network: str = None) -> int:
         """
         Estimates optimal chunk size for parallel processing based on network conditions and system resources.
@@ -1053,51 +1256,30 @@ class DiscoveryService:
             # Test network latency to determine if we should increase/decrease
             test_ip = None
             
-            # If network specified, use first IP in that network
-            if network:
+            # First try to get the default gateway - this should be our primary test target
+            gateway = self._get_default_gateway()
+            if gateway:
+                logger.info(f"Using gateway IP for latency test: {gateway}")
+                test_ip = gateway
+            # If no gateway found and network is specified, use first IP in that network as fallback
+            elif network:
                 network_obj = ipaddress.ip_network(network)
                 hosts = list(network_obj.hosts())
                 if hosts:
                     test_ip = str(hosts[0])
+                    logger.info(f"Using first host in network for latency test: {test_ip}")
             
-            # Fallback to gateway IP
+            # If we still don't have a test IP, use loopback as last resort
             if not test_ip:
-                gateway = None
-                try:
-                    # Try to get default gateway
-                    import socket
-                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    s.connect(("8.8.8.8", 80))
-                    local_ip = s.getsockname()[0]
-                    s.close()
-                    
-                    # Extract first three octets and append .1 as common gateway
-                    gateway = ".".join(local_ip.split(".")[:3]) + ".1"
-                except Exception:
-                    pass
-                
-                test_ip = gateway or "127.0.0.1"  # Fallback to common gateway
-                
-            logger.info(f"Using gateway IP: {test_ip}")
+                test_ip = "127.0.0.1"
+                logger.info(f"Could not detect gateway, using localhost for latency test: {test_ip}")
             
-            # Test latency
-            import asyncio
-            import time
-            latency_ms = 100  # Default assumption
+            logger.info(f"Testing latency to {test_ip}")
             
-            # Create a simple HTTP GET request to measure latency
-            await self._ensure_session()
-            try:
-                start_time = time.time()
-                async with self._session.get(f"http://{test_ip}", timeout=2) as response:
-                    # Just getting the response status is enough
-                    status = response.status
-                    # Calculate latency
-                    latency_ms = (time.time() - start_time) * 1000
-            except Exception:
-                # If timeout or error, assume high latency
-                latency_ms = 500
-            logger.info(f"Latency: {latency_ms}ms")
+            # Test latency using our enhanced method
+            latency_ms = await self._test_latency(test_ip)
+            
+            logger.info(f"Network latency: {latency_ms:.1f}ms")
             
             # Adjust multiplier based on latency
             if latency_ms < 10:  # Very fast network

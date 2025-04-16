@@ -4,8 +4,17 @@ import logging
 import json
 from typing import Dict, Any, Optional, List
 from ..models.device import Device, DeviceGeneration
+import os
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+class Config:
+    """Simple configuration class to hold paths to config files"""
+    def __init__(self, config_file: Optional[Path] = None, devices_file: Optional[Path] = None):
+        self.config_file = config_file or Path("config/config.yaml")
+        self.devices_file = devices_file or Path("config/devices.yaml")
+        logger.debug(f"Config initialized with config_file={self.config_file}, devices_file={self.devices_file}")
 
 class ConfigManager:
     def __init__(self):

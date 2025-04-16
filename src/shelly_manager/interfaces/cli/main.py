@@ -9,12 +9,13 @@ from ...discovery.discovery_service import DiscoveryService
 from ...models.device import Device, DeviceGeneration
 from ...models.device_registry import device_registry
 from ...utils.logging import LogConfig, get_logger
-from ...config_manager.config_manager import ConfigManager
+from ...config_manager.config_manager import ConfigManager, Config
 import sys
 from rich.layout import Layout
 from rich.spinner import Spinner
 from rich.text import Text
 from rich import box
+from pathlib import Path
 
 # Import the groups app
 from .commands.groups import app as groups_app
@@ -23,41 +24,8 @@ from .commands.parameters import app as parameters_app
 # Import the capabilities command module
 from .commands import capabilities
 
-# Set up early debug detection from command line args
-def configure_early_debug():
-    """Configure early debug logging if --debug flag is detected in command line arguments"""
-    if "--debug" in sys.argv:
-        # Configure root logger immediately
-        logging.basicConfig(level=logging.DEBUG)
-        root_logger = logging.getLogger()
-        root_logger.setLevel(logging.DEBUG)
-        
-        # Add a console handler for immediate output
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        console_handler.setFormatter(formatter)
-        root_logger.addHandler(console_handler)
-        
-        # Enable debug for key modules
-        for module in [
-            "shelly_manager.config_manager",
-            "shelly_manager.discovery",
-            "shelly_manager.interfaces.cli",
-            "shelly_manager.models",
-            "shelly_manager.utils",
-            "shelly_manager.parameter",
-            "shelly_manager.grouping",
-        ]:
-            logging.getLogger(module).setLevel(logging.DEBUG)
-            
-        debug_logger = logging.getLogger("early_debug")
-        debug_logger.debug("Early debug logging enabled via command line --debug flag")
-        return True
-    return False
-
 # Enable early debug logging
-early_debug_enabled = configure_early_debug()
+early_debug_enabled = LogConfig.check_early_debug()
 
 # Create Typer app
 app = typer.Typer()
@@ -124,26 +92,39 @@ def enable_full_debug_logging(debug: bool):
         logger.debug("Comprehensive debug logging enabled")
 
 @app.callback()
-def main(debug: bool = typer.Option(False, "--debug", help="Enable debug logging")):
+def main(
+    ctx: typer.Context,
+    config_file: Path = typer.Option(
+        None, "--config", "-c", help="Path to configuration file"
+    ),
+    devices_file: Path = typer.Option(
+        None, "--devices", "-d", help="Path to devices file"
+    ),
+    debug: bool = typer.Option(False, "--debug", help="Enable debug mode"),
+):
     """
-    Shelly Manager CLI - manage and control Shelly devices
+    Shelly Manager CLI tool for bulk configuration and management of Shelly devices
     """
-    # Check if debug was enabled early via command line
-    debug = debug or "--debug" in sys.argv or early_debug_enabled
-    
-    # Configure logging
-    log_config = LogConfig(
-        app_name="shelly_manager",
-        debug=debug,
-        log_to_file=True,
-        log_to_console=True
-    )
-    log_config.setup()
-    
-    # Enable comprehensive debug logging if requested
+    # Configure logging if not already done
+    if not LogConfig._is_setup:
+        LogConfig.setup(debug=debug or early_debug_enabled)
+        
+    # If debug is enabled, make sure all modules get debug logging
     if debug:
         enable_full_debug_logging(debug)
-        logger.debug("Debug mode enabled in main callback")
+        
+    # Set global context variables
+    ctx.obj = {}
+    ctx.obj["debug"] = debug
+    
+    # Initialize configuration
+    cfg = Config()
+    if config_file:
+        cfg.config_file = config_file
+    if devices_file:
+        cfg.devices_file = devices_file
+    
+    ctx.obj["config"] = cfg
     
     # Initialize device registry by loading all devices
     try:
@@ -165,14 +146,9 @@ def discover(
 ):
     """Discover Shelly devices on the network"""
     try:
-        # Configure logging
-        log_config = LogConfig(
-            app_name="shelly_manager",
-            debug=debug,
-            log_to_file=True,
-            log_to_console=True
-        )
-        log_config.setup()
+        # Configure logging if not already set up
+        if not LogConfig._is_setup:
+            LogConfig.setup(debug=debug or early_debug_enabled)
         
         # Enable comprehensive debug if needed
         if debug:
@@ -288,6 +264,10 @@ def get_settings(device_id: str, debug: bool = typer.Option(False, help="Enable 
     """Get settings for a specific device"""
     global discovery_service
     
+    # Configure logging if not already set up
+    if not LogConfig._is_setup:
+        LogConfig.setup(debug=debug or early_debug_enabled)
+    
     if debug:
         # Enable comprehensive debug
         enable_full_debug_logging(debug)
@@ -340,25 +320,11 @@ def set_settings(device_id: str, setting: list[str], debug: bool = typer.Option(
     global discovery_service
     global config_manager
     
+    # Configure logging if not already set up
+    if not LogConfig._is_setup:
+        LogConfig.setup(debug=debug or early_debug_enabled)
+    
     if debug:
-        # Configure detailed logging
-        logging.basicConfig(level=logging.DEBUG)
-        root_logger = logging.getLogger()
-        root_logger.setLevel(logging.DEBUG)
-        
-        # Add a console handler for immediate output
-        console_handler = logging.StreamHandler()
-        console_handler.setLevel(logging.DEBUG)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        console_handler.setFormatter(formatter)
-        
-        # Remove any existing handlers to avoid duplicates
-        for handler in list(root_logger.handlers):
-            if isinstance(handler, logging.StreamHandler) and not isinstance(handler, logging.FileHandler):
-                root_logger.removeHandler(handler)
-        
-        root_logger.addHandler(console_handler)
-        
         # Enable comprehensive debug
         enable_full_debug_logging(debug)
         logger.debug("Debug mode enabled in set_settings command")
